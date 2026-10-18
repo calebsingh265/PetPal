@@ -1,0 +1,381 @@
+# PetPal — Setup Guide
+
+**Read this first. Follow it top to bottom. Do not skip a step.**
+
+This guide takes you from an empty computer to a working, deployed copy of PetPal
+under your own accounts. It assumes you have never used Supabase or Vercel before.
+
+Total time: about 30 minutes.
+
+---
+
+## What you are building
+
+PetPal is a website. It has two halves:
+
+| Half | What it is | Where it lives |
+|---|---|---|
+| **The app** | The pages, the design, the 3D animals, all the code | GitHub → Vercel |
+| **The database** | Accounts, pets with their weigh-ins and reminders, community posts, Ask a Vet | Supabase |
+
+They are separate services and both are free. The app talks to the database using
+two settings called **environment variables**. If those two settings are wrong,
+the app loads but sign-in fails with *"Can't reach the database"*.
+
+---
+
+## Step 0 — Accounts you need
+
+Create these three free accounts first. Use the same email for all three so you
+don't lose track.
+
+1. **GitHub** — https://github.com (stores the code)
+2. **Supabase** — https://supabase.com (the database)
+3. **Vercel** — https://vercel.com (puts the website online)
+
+> Sign in to Supabase and Vercel **with your GitHub account**. It saves a lot of
+> clicking later.
+
+---
+
+## Step 1 — Put the code on your GitHub
+
+1. Download this project folder to your computer.
+2. Go to https://github.com/new and make a new repository.
+   - Name it `petpal`
+   - Set it to **Public**
+   - Do **not** tick "Add a README"
+   - Click **Create repository**
+3. On your computer, open a terminal **inside the project folder** and run these
+   lines one at a time. Replace `YOUR-USERNAME` with your GitHub username.
+
+```bash
+git init
+git add .
+git commit -m "PetPal"
+git branch -M main
+git remote add origin https://github.com/YOUR-USERNAME/petpal.git
+git push -u origin main
+```
+
+4. Refresh your GitHub page. The files should be there.
+
+---
+
+## Step 2 — Create the database
+
+1. Go to https://supabase.com/dashboard and click **New project**.
+2. Fill in:
+   - **Name**: `petpal`
+   - **Database Password**: click Generate, then **save it somewhere** — you
+     cannot see it again
+   - **Region**: pick the one closest to you
+3. Click **Create new project** and wait. It takes about two minutes.
+
+> ⚠️ **Free Supabase projects pause after about a week with no traffic.** If
+> sign-in stops working weeks later, this is almost always why. Open the
+> dashboard and click **Restore** — it takes a minute and loses nothing.
+
+---
+
+## Step 3 — Create the tables
+
+The database is empty. This step creates the nine tables the app needs, along
+with the security rules that decide who may read and change each one.
+
+1. In your Supabase project, click **SQL Editor** in the left sidebar.
+2. Click **New query**.
+3. Open the file **`supabase/schema.sql`** from this project.
+4. Copy **the entire file** and paste it into the SQL Editor.
+5. Click **Run** (or press Ctrl+Enter).
+
+You should see **Success. No rows returned**. That is correct — it means it worked.
+
+To check: click **Table Editor** in the sidebar. You should now see nine tables:
+`profiles`, `pets`, `pet_reminders`, `pet_weights`, `confessions`,
+`vet_profiles`, `vet_replies`, `questions` and `answers`.
+
+> You can run this file again later without breaking anything. It repairs a
+> half-finished setup rather than erroring.
+
+> 🔁 **Already set up from an older copy of PetPal? Run the whole file again.**
+> This version adds two tables (`pet_reminders` and `pet_weights`, for the
+> health records on each pet's page) and closes several security holes in the
+> old rules — for example, any signed-in user could previously make themselves
+> an administrator from the browser console. None of that reaches your database
+> until you paste the **entire** `supabase/schema.sql` into the SQL Editor and
+> click Run again. It is safe to re-run: existing accounts, pets and posts are
+> kept. Afterwards, open `/setup` — it checks all nine tables and names any that
+> are missing.
+
+---
+
+## Step 4 — Get your two keys
+
+You need two values from Supabase. Keep this tab open.
+
+The quickest route is the **Connect** button in the top bar of your project —
+it shows the Project URL and the key together. If you would rather find them in
+the settings pages:
+
+1. In Supabase, click the **gear icon** (Project Settings) at the bottom left.
+2. Click **Data API**. Copy the **Project URL**. It looks like:
+   ```
+   https://abcdefghijklmnop.supabase.co
+   ```
+3. Click **API Keys** in the same settings menu.
+4. Copy the **publishable** key — see the table below for which one that is.
+
+### Which key is which — this matters
+
+Supabase changed its key system, so a new project may show you either naming.
+**Both work.** What you need is the low-privilege one, whichever it is called:
+
+| What you may see | Looks like | Use it here? |
+|---|---|---|
+| **Publishable key** (current) | `sb_publishable_...` — a short string | ✅ **Yes** |
+| **anon** / **public** (legacy) | `eyJ...` — a very long string | ✅ Yes, if that is what your project shows |
+| **Secret key** (current) | `sb_secret_...` | ❌ **Never** |
+| **service_role** (legacy) | `eyJ...` — a very long string | ❌ **Never** |
+
+A brand-new project will usually show you the `sb_publishable_...` form. Older
+projects show the long `eyJ...` anon key. The variable is still named
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` either way — the app does not care about the
+format, only that the key is the low-privilege one.
+
+> 🚨 **Never** put a secret or `service_role` key into a variable whose name
+> starts with `NEXT_PUBLIC_`. Anything with that prefix is downloaded by every
+> visitor's browser. Publishing it gives strangers full read and write access to
+> your entire database, bypassing every security rule in the schema.
+
+> The two safe keys are safe *because* Row Level Security limits them. That is
+> what `supabase/schema.sql` sets up, which is why Step 3 comes first.
+
+---
+
+## Step 5 — Deploy to Vercel
+
+1. Go to https://vercel.com/new
+2. Find your `petpal` repository and click **Import**.
+3. **Before clicking Deploy**, expand **Environment Variables** and add these
+   two. Type the names **exactly** — a single typo is the most common reason
+   this fails.
+
+| Name | Value |
+|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | the Project URL from Step 4 |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the publishable / anon key from Step 4 |
+
+Copy-paste these names rather than typing them:
+
+```
+NEXT_PUBLIC_SUPABASE_URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY
+```
+
+4. Click **Deploy** and wait two or three minutes.
+5. Vercel gives you a link like `https://petpal-xyz.vercel.app`. That is your
+   live website.
+
+### Common mistakes in this step
+
+- **Pasting the URL with a trailing slash or extra path.** It must be exactly
+  `https://something.supabase.co` and nothing more.
+- **Pasting the wrong key.** Check it against the table in Step 4. A current
+  publishable key starts `sb_publishable_`; a legacy anon key starts `eyJ`.
+  Anything starting `sb_secret_` or any key labelled service_role is the wrong
+  one and must never go here.
+- **A space at the start or end.** Vercel keeps it. Delete and re-paste.
+
+---
+
+## Step 5b — Tell Supabase your website's address
+
+Sign-up confirmation emails and password-reset emails contain a link back to
+your site. Supabase only builds those links for addresses you have allowed —
+skip this and every email link points at `localhost` and fails.
+
+1. Supabase → your project → **Authentication** → **URL Configuration**.
+2. **Site URL**: paste your Vercel link from Step 5, e.g.
+   `https://petpal-xyz.vercel.app` (no slash at the end). Click **Save**.
+3. **Redirect URLs** → **Add URL** → paste the same link followed by `/**`:
+   ```
+   https://petpal-xyz.vercel.app/**
+   ```
+   Click **Save**. (Add `http://localhost:3000/**` as well if you will also run
+   it on your own computer.)
+
+---
+
+## Step 6 — Check it worked
+
+Open your live site and add `/setup` to the end of the address:
+
+```
+https://your-site.vercel.app/setup
+```
+
+This page runs every check and tells you exactly what is wrong if something is.
+Work down the list until all of them are green.
+
+| What it says | What to do |
+|---|---|
+| Variable not set | Go back to Step 5. Add it, then **redeploy** (below). |
+| URL doesn't look like a Supabase URL | Re-copy it from Step 4. No trailing slash. |
+| Project does not respond | The project is paused or deleted. Open Supabase and Restore it. |
+| Anon key rejected | You copied the wrong key. Get the **publishable** (or legacy **anon**) one — see Step 4. |
+| Table not found | You skipped Step 3, or set up from an older copy. Run the whole of `supabase/schema.sql` again. |
+
+Then create an account on your site to confirm sign-up works.
+
+---
+
+## ⚠️ You must redeploy after changing a variable
+
+Environment variables are baked into the website **when it is built**. Changing
+one in Vercel does **nothing** until you rebuild.
+
+1. Vercel → your project → **Deployments**
+2. Click the **…** menu on the newest deployment
+3. Click **Redeploy**
+
+If you change a variable and it still doesn't work, you almost certainly forgot
+this.
+
+---
+
+## Running it on your own computer (optional)
+
+You only need this if you want to edit the code.
+
+1. Install Node.js (version 20 or newer) from https://nodejs.org
+2. In the project folder, create a file called exactly `.env.local`
+3. Put this in it, with your own values:
+
+```
+NEXT_PUBLIC_SUPABASE_URL=https://yourproject.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_...your-key...
+```
+
+4. Then run:
+
+```bash
+npm install
+npm run dev
+```
+
+5. Open http://localhost:3000
+
+> `.env.local` is listed in `.gitignore`, so your keys are never uploaded to
+> GitHub. Keep it that way.
+
+---
+
+## Making yourself an admin
+
+The admin console at `/admin` only opens for an admin account.
+
+1. Sign up on your site normally.
+2. Supabase → **SQL Editor** → New query.
+3. Run this with your own email:
+
+```sql
+update profiles set role = 'admin' where email = 'you@example.com';
+```
+
+4. Sign out and back in.
+
+---
+
+## Verifying a veterinary professional
+
+PetPal has two kinds of account. Anyone can register as a **veterinary
+professional**, but nobody is trusted automatically — a new professional account
+is created with `verified = false` and cannot post answers until an
+administrator confirms them.
+
+**Why it works this way:** a self-declared "vet" badge on clinical advice is
+dangerous. Someone could tell an owner that a toxic food is safe while wearing a
+professional badge. The restriction is enforced by a database policy, so hiding
+the button in the interface is not what stops it.
+
+To verify someone (you must be an admin — see the section above):
+
+1. Ask them for their registration number and check it against the professional
+   register yourself.
+2. On your site, open **Admin Panel** in the sidebar (`/admin`) → **Vets** tab.
+3. Find them in the list and click **Verify**. **Revoke** takes it away again.
+
+They can answer questions on **Ask a Vet** from their next page load.
+
+The screen only reports success once the database has confirmed the change. If
+two accounts have entered the same registration number, both rows are marked
+*"Same number as another account — check before verifying"*. That is not blocked
+at sign-up on purpose: a database rule would make the second person's sign-up
+fail with an unreadable "Database error saving new user", so it is left to you
+to check.
+
+A vet cannot verify themselves or change their own registration number — the
+database refuses both, even from the browser console. Only an admin can.
+
+> If you ever need to do it by hand, the SQL still works:
+> `update vet_profiles set verified = true where id = 'their-id';`
+> (find the id with `select id, full_name, registration_no, verified from vet_profiles;`).
+
+---
+
+## The four variables you may see
+
+The original deployment had four environment variables. Only two of them do
+anything:
+
+| Variable | Needed? | Why |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | ✅ **Required** | Where the database is |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ **Required** | Lets the app talk to it |
+| `NEXT_PUBLIC_SITE_URL` | ❌ Not used | Left over. Harmless, but no code reads it. |
+| `SUPABASE_SERVICE_ROLE_KEY` | ❌ Not used | Left over. No code reads it. **Never** rename it to start with `NEXT_PUBLIC_`. The same goes for a current-style `sb_secret_...` key. |
+
+You can safely delete the bottom two.
+
+---
+
+## Troubleshooting
+
+**"Failed to fetch" / "Can't reach the database" when signing in**
+The request never reached Supabase. In order of likelihood: the project is
+paused, the URL is wrong, or you're offline. Open `/setup`.
+
+**"Invalid login credentials"**
+This one really is a wrong email or password — the connection is fine.
+
+**Sign-up works but no confirmation email arrives**
+Supabase's built-in email sender is rate-limited and often lands in spam. For a
+demo, turn confirmation off: Supabase → **Authentication** → **Sign In / Up** →
+**Email** → turn off *Confirm email*. With confirmation off, a new account is
+signed straight in after sign-up instead of being told to check its email.
+
+**"Forgot password" — where do I set the new password?**
+The emailed link signs the user in and lands on **Settings → Password &
+Privacy** (`/settings?tab=security`), where the new password is set.
+
+**The site builds but every page is blank**
+Check Vercel → Deployments → the failed build's **Logs**. The error is usually
+on the last few lines.
+
+**The map is empty on Find a Vet**
+The practice list comes from OpenStreetMap, which is free and needs no key. If
+tiles fail to load the app falls back to a second provider, then shows a notice.
+The list and Directions links keep working regardless.
+
+---
+
+## Quick reference
+
+```
+Live site        https://<your-project>.vercel.app
+Setup check      https://<your-project>.vercel.app/setup
+Supabase         https://supabase.com/dashboard
+Vercel           https://vercel.com/dashboard
+Schema to run    supabase/schema.sql
+```

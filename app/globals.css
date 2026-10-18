@@ -1,0 +1,743 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: var(--font-body);
+  --font-heading: var(--font-display);
+  --font-serif: var(--font-serif);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+:root {
+  /* ══ "INK & APRICOT" ══════════════════════════════════════════════════
+     Ground:    warm violet-black, not the usual neutral charcoal
+     Primary:   apricot — warm, animal, appetising
+     Secondary: iris — cool counterweight that keeps it from going "autumn"
+     Support:   butter, pistachio, rose
+
+     Chosen deliberately against the dark-SaaS default of coral/teal (or
+     emerald/blue) on neutral grey, which reads as a template. None of these
+     are stock framework ramps. */
+  --background: #0D0A14;
+  --foreground: #F4EFF7;
+  --card: #171226;
+  --card-foreground: #F4EFF7;
+  --popover: #1C1630;
+  --popover-foreground: #F4EFF7;
+
+  /* Signature apricot */
+  --primary: #FFAE6D;
+  --primary-foreground: #2A1A08;
+
+  --secondary: #1C1630;
+  --secondary-foreground: #F4EFF7;
+  --muted: #1C1630;
+  --muted-foreground: #A79CBF;
+  --accent: #201A34;
+  --accent-foreground: #F4EFF7;
+  --destructive: #FF6B81;
+  --border: rgba(255,255,255,0.07);
+  --input: rgba(255,255,255,0.05);
+  --ring: #FFAE6D;
+  --radius: 1rem;
+
+  /* Data / accent palette — five visually distinct series colours.
+     Previously chart-2, chart-3 and chart-4 were all the same teal, so any
+     multi-series chart rendered as one indistinguishable colour. */
+  --chart-1: #FFAE6D;   /* apricot   */
+  --chart-2: #8E8BF5;   /* iris      */
+  --chart-3: #FFD98E;   /* butter    */
+  --chart-4: #8FD9A8;   /* pistachio */
+  --chart-5: #68C9F0;   /* sky       */
+
+  /* Brand stops — names match the actual hues. */
+  --bg: #0D0A14;
+  --apricot: #FFAE6D;
+  --apricot-deep: #F2814F;
+  --apricot-light: #FFC79A;
+  --iris: #8E8BF5;
+  --iris-deep: #6F6BE0;
+  --butter: #FFD98E;
+  --pistachio: #8FD9A8;
+  --rose: #FF6B81;
+  --amber: #FFD98E;
+  --danger: #FF6B81;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  /* Anyone who has asked their OS for less motion gets a still, calm page:
+     no marquees, no floating, no blob morphing, no smooth-scroll hijack. */
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+    *, *::before, *::after {
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.001ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  * {
+    @apply border-border outline-ring/50;
+    box-sizing: border-box;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-body), system-ui, sans-serif;
+    font-feature-settings: "cv11", "ss01", "ss03";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display), system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+  }
+  ::selection { background: rgba(255,174,109,0.3); color: #FFFFFF; }
+}
+
+/* ═══════════ SURFACES ═══════════ */
+.glass {
+  background: rgba(10,13,15,0.55);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.09);
+}
+.glass-strong {
+  background: rgba(14,19,22,0.82);
+  backdrop-filter: blur(48px) saturate(200%);
+  -webkit-backdrop-filter: blur(48px) saturate(200%);
+}
+.glass-card {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.008) 100%),
+    rgba(10,13,15,0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255,255,255,0.07);
+}
+
+/* ═══════════ PATTERNS ═══════════ */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.026) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.026) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 0%, black 25%, transparent 75%);
+}
+.bg-grid-full {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.022) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+.bg-dots {
+  background-image: radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+.grain::after {
+  content: '';
+  position: absolute; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
+  opacity: 0.035;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+}
+
+/* ═══════════ MESH / AURORA ═══════════ */
+.bg-mesh {
+  background:
+    radial-gradient(at 22% 18%, rgba(255,174,109,0.18) 0px, transparent 50%),
+    radial-gradient(at 78% 8%, rgba(142,139,245,0.16) 0px, transparent 45%),
+    radial-gradient(at 8% 88%, rgba(142,139,245,0.10) 0px, transparent 50%),
+    radial-gradient(at 92% 82%, rgba(142,139,245,0.12) 0px, transparent 50%);
+}
+.bg-mesh-soft {
+  background:
+    radial-gradient(at 28% 28%, rgba(255,174,109,0.08) 0px, transparent 60%),
+    radial-gradient(at 80% 72%, rgba(142,139,245,0.06) 0px, transparent 60%);
+}
+
+/* ═══════════ GLOWS ═══════════ */
+.glow-emerald { box-shadow: 0 0 60px rgba(255,174,109,0.38), 0 0 130px rgba(255,174,109,0.12); }
+.glow-emerald-sm { box-shadow: 0 0 30px rgba(255,174,109,0.28); }
+.glow-blue { box-shadow: 0 0 50px rgba(142,139,245,0.35); }
+.glow-cyan { box-shadow: 0 0 45px rgba(142,139,245,0.3); }
+.glow-teal { box-shadow: 0 0 45px rgba(142,139,245,0.3); }
+
+/* ═══════════ GRADIENT TEXT ═══════════ */
+.text-gradient-aurora {
+  background: linear-gradient(112deg, #FFAE6D 0%, #FFD98E 38%, #8E8BF5 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.text-gradient-electric {
+  background: linear-gradient(112deg, #8E8BF5 0%, #B6A6FF 45%, #FFAE6D 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.text-gradient-soft {
+  background: linear-gradient(180deg, #FFFFFF 0%, #F4EFF7 38%, #7E7398 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.text-gradient-cool {
+  background: linear-gradient(112deg, #8E8BF5 0%, #68C9F0 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+/* Animated gradient text */
+.text-gradient-animated {
+  background: linear-gradient(112deg, #FFAE6D, #FFD98E, #8E8BF5, #B6A6FF, #FFAE6D);
+  background-size: 300% 100%;
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+  animation: gradient-shift 7s linear infinite;
+}
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 300% 50%; }
+}
+
+/* ═══════════ GRADIENT BORDERS ═══════════ */
+.border-gradient {
+  position: relative; background-clip: padding-box;
+}
+.border-gradient::before {
+  content: ''; position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+  background: linear-gradient(135deg, rgba(255,174,109,0.5), rgba(142,139,245,0.24) 42%, transparent 62%, rgba(255,217,142,0.34));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+}
+.border-glow-rotate {
+  position: relative;
+}
+.border-glow-rotate::before {
+  content: ''; position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px;
+  background: conic-gradient(from var(--angle, 0deg), transparent 0%, #FFAE6D 10%, #FFD98E 22%, transparent 38%, transparent 62%, #8E8BF5 78%, transparent 92%);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude; pointer-events: none;
+  animation: rotate-angle 4s linear infinite;
+}
+@property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+@keyframes rotate-angle { to { --angle: 360deg; } }
+
+/* ═══════════ ANIMATIONS ═══════════ */
+@keyframes marquee-x { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+.animate-marquee-x { display: flex; animation: marquee-x 50s linear infinite; }
+.animate-marquee-fast { display: flex; animation: marquee-x 28s linear infinite; }
+
+/* Vertical marquee columns (Higgsfield-style media wall) */
+@keyframes marquee-y-up { 0% { transform: translateY(0); } 100% { transform: translateY(-50%); } }
+@keyframes marquee-y-down { 0% { transform: translateY(-50%); } 100% { transform: translateY(0); } }
+.marquee-col-up { animation: marquee-y-up linear infinite; }
+.marquee-col-down { animation: marquee-y-down linear infinite; }
+.mask-fade-y {
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, #000 12%, #000 88%, transparent);
+}
+
+@keyframes shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+.animate-shimmer {
+  background: linear-gradient(110deg, transparent 30%, rgba(255,255,255,0.09) 50%, transparent 70%);
+  background-size: 200% 100%; animation: shimmer 3s linear infinite;
+}
+
+@keyframes pulse-ring { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.8); opacity: 0; } }
+.animate-pulse-ring { animation: pulse-ring 2.4s cubic-bezier(0.215,0.61,0.355,1) infinite; }
+
+@keyframes float-slow { 0%,100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-18px) rotate(2deg); } }
+.animate-float-slow { animation: float-slow 7s ease-in-out infinite; }
+@keyframes float-medium { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+.animate-float-medium { animation: float-medium 4.5s ease-in-out infinite; }
+@keyframes float-x { 0%,100% { transform: translateX(0); } 50% { transform: translateX(14px); } }
+.animate-float-x { animation: float-x 6s ease-in-out infinite; }
+
+@keyframes glow-pulse { 0%,100% { opacity: 0.3; transform: scale(1); } 50% { opacity: 0.72; transform: scale(1.08); } }
+.animate-glow-pulse { animation: glow-pulse 3.5s ease-in-out infinite; }
+
+@keyframes scan-line { 0% { transform: translateY(-100%); } 100% { transform: translateY(100vh); } }
+.animate-scan { animation: scan-line 9s linear infinite; }
+
+@keyframes blob {
+  0%,100% { transform: translate(0,0) scale(1); border-radius: 42% 58% 70% 30% / 45% 45% 55% 55%; }
+  33% { transform: translate(40px,-30px) scale(1.12); border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+  66% { transform: translate(-25px,25px) scale(0.92); border-radius: 35% 65% 55% 45% / 55% 55% 45% 45%; }
+}
+.animate-blob { animation: blob 16s ease-in-out infinite; }
+
+@keyframes rotate-slow { from { transform: rotate(0); } to { transform: rotate(360deg); } }
+.animate-rotate-slow { animation: rotate-slow 24s linear infinite; }
+.animate-rotate-rev { animation: rotate-slow 30s linear infinite reverse; }
+
+@keyframes fade-up { 0% { opacity: 0; transform: translateY(14px); } 100% { opacity: 1; transform: translateY(0); } }
+.animate-fade-up { animation: fade-up 0.7s cubic-bezier(0.16,1,0.3,1); }
+
+/* ═══════════ HOVER EFFECTS ═══════════ */
+.surface-hover {
+  position: relative; transition: all 0.45s cubic-bezier(0.16,1,0.3,1);
+}
+.surface-hover:hover {
+  border-color: rgba(255,174,109,0.3) !important;
+  transform: translateY(-4px);
+  box-shadow: 0 16px 60px -12px rgba(255,174,109,0.22), 0 0 0 1px rgba(255,174,109,0.12);
+}
+
+.lift {
+  transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), box-shadow 0.4s ease;
+}
+.lift:hover {
+  transform: translateY(-6px) scale(1.015);
+  box-shadow: 0 24px 70px -20px rgba(0,0,0,0.7);
+}
+
+.spotlight {
+  position: relative; overflow: hidden;
+}
+.spotlight::before {
+  content: ''; position: absolute; width: 500px; height: 500px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(255,174,109,0.1), transparent 60%);
+  top: var(--my, 50%); left: var(--mx, 50%);
+  transform: translate(-50%,-50%); pointer-events: none;
+  opacity: 0; transition: opacity 0.4s;
+}
+.spotlight:hover::before { opacity: 1; }
+
+/* ═══════════ SCROLLBAR ═══════════ */
+::-webkit-scrollbar { width: 7px; height: 7px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, rgba(255,174,109,0.45), rgba(142,139,245,0.45));
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, #FFAE6D, #8E8BF5); }
+
+/* ═══════════ A11Y FOCUS ═══════════ */
+*:focus-visible {
+  outline: 2px solid rgba(255,174,109,0.8); outline-offset: 2px; border-radius: 4px;
+}
+
+/* ═══════════ SKELETON ═══════════ */
+.skeleton {
+  background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%; animation: shimmer 1.5s linear infinite;
+}
+
+/* ═══════════ GLASS BUTTONS ═══════════ */
+.btn-glass {
+  position: relative;
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.12);
+  transition: all 0.35s cubic-bezier(0.16,1,0.3,1);
+}
+.btn-glass:hover {
+  background: rgba(255,255,255,0.09);
+  border-color: rgba(255,255,255,0.22);
+  transform: translateY(-1px);
+}
+/* Coral-tinted glass (primary action).
+   The text colour was #FFE9D6 — a mint green left over from an earlier palette,
+   sitting on a coral button. Now a warm near-white that actually belongs and
+   clears contrast requirements against the tinted glass. */
+.btn-glass-primary {
+  position: relative;
+  background: linear-gradient(135deg, rgba(255,174,109,0.20), rgba(255,174,109,0.07));
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255,174,109,0.38);
+  color: #FFE9E4;
+  transition: all 0.35s cubic-bezier(0.16,1,0.3,1);
+}
+.btn-glass-primary:hover {
+  background: linear-gradient(135deg, rgba(255,174,109,0.30), rgba(255,174,109,0.12));
+  border-color: rgba(255,174,109,0.58);
+  box-shadow: 0 8px 32px rgba(255,174,109,0.22);
+  transform: translateY(-1px);
+}
+
+/* ═══════════ UTIL ═══════════ */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+.clip-hexagon { clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%); }
+.clip-diamond { clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%); }
+.mask-fade-b { mask-image: linear-gradient(to bottom, black 60%, transparent); }
+.mask-fade-r { mask-image: linear-gradient(to right, black 70%, transparent); }
+.perspective { perspective: 1200px; }
+.preserve-3d { transform-style: preserve-3d; }
+
+/* ────────────────────────────────────────────────────────────────────────────
+   Appearance preferences
+
+   These classes are toggled on <html> by PreferencesProvider from the user's
+   saved settings. They exist because the Appearance tab used to save a boolean
+   and change nothing — a setting that reports success and does nothing is
+   worse than no setting, since the user then believes it is in effect.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+/* Reduce motion. Matches what `prefers-reduced-motion` does, but driven by the
+   in-app setting so it works regardless of the OS preference. The 0.01ms rather
+   than 0 keeps transitionend/animationend handlers firing, so anything that
+   waits on them still completes instead of hanging. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* High contrast. Lifts muted body text to full foreground and strengthens the
+   hairline borders the dark theme leans on, which are the two things that fail
+   first for low-vision users. */
+html.high-contrast {
+  --muted-foreground: #E8E1F2;
+  --border: rgba(255, 255, 255, 0.28);
+  --input: rgba(255, 255, 255, 0.18);
+}
+html.high-contrast .text-zinc-400,
+html.high-contrast .text-zinc-500 {
+  color: #E8E1F2;
+}
+html.high-contrast .glass-card,
+html.high-contrast [class*="border-white/"] {
+  border-color: rgba(255, 255, 255, 0.28);
+}
+
+/* ────────────────────────────────────────────────────────────────────────────
+   LIGHT THEME
+
+   The interface was built dark, with the ground, the surfaces and the hairline
+   borders hard-coded into roughly four hundred utility classes rather than
+   drawn from tokens. Rewriting every one of those was the riskier change, so
+   the light theme instead REDEFINES what those recurring utilities resolve to
+   — the same technique the high-contrast block above already uses.
+
+   The selectors are written out explicitly rather than matched with
+   [class*="bg-white/"], because a substring match would also hit
+   `hover:bg-white/5` and pin that hover state permanently on.
+
+   Applied by PreferencesProvider as data-theme="light" on <html>.
+   ──────────────────────────────────────────────────────────────────────────── */
+
+:root[data-theme="light"] {
+  --background: #FBF7F4;          /* warm off-white, not a cold grey */
+  --foreground: #24192E;          /* deep plum ink, echoing the dark ground */
+  --card: #FFFFFF;
+  --card-foreground: #24192E;
+  --popover: #FFFFFF;
+  --popover-foreground: #24192E;
+  --secondary: #F2EBE6;
+  --secondary-foreground: #24192E;
+  --muted: #F2EBE6;
+  --muted-foreground: #6B5F73;
+  --accent: #F2EBE6;
+  --accent-foreground: #24192E;
+  --border: rgba(36, 25, 46, 0.12);
+  --input: rgba(36, 25, 46, 0.10);
+}
+
+:root[data-theme="light"] body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* The accent is the user's choice and every swatch is a light pastel — legible
+   on the dark ground, not on a white one. Darken it for text and borders only;
+   fills keep the true colour. color-mix means this follows whatever accent is
+   set rather than hard-coding a second palette. */
+:root[data-theme="light"] .text-primary {
+  color: color-mix(in oklab, var(--primary) 62%, #2A1400);
+}
+
+/* Frosted surfaces invert: light glass on a warm ground. */
+:root[data-theme="light"] .glass-card {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.72) 100%),
+    var(--card);
+  border: 1px solid rgba(36, 25, 46, 0.10);
+  box-shadow: 0 1px 2px rgba(36, 25, 46, 0.04), 0 8px 24px rgba(36, 25, 46, 0.05);
+}
+
+:root[data-theme="light"] .border-primary\/20 {
+  border-color: color-mix(in oklab, var(--primary) 55%, #2A1400);
+}
+:root[data-theme="light"] .border-primary\/25 {
+  border-color: color-mix(in oklab, var(--primary) 55%, #2A1400);
+}
+:root[data-theme="light"] .border-primary\/30 {
+  border-color: color-mix(in oklab, var(--primary) 55%, #2A1400);
+}
+:root[data-theme="light"] .border-primary\/40 {
+  border-color: color-mix(in oklab, var(--primary) 55%, #2A1400);
+}
+:root[data-theme="light"] .border-primary\/50 {
+  border-color: color-mix(in oklab, var(--primary) 55%, #2A1400);
+}
+
+/* Body copy. The dark theme leans on zinc for every level of emphasis. */
+:root[data-theme="light"] .text-zinc-100 { color: #1B1222; }
+:root[data-theme="light"] .text-zinc-200 { color: #24192E; }
+:root[data-theme="light"] .text-zinc-300 { color: #3A2E44; }
+:root[data-theme="light"] .text-zinc-400 { color: #5C4F66; }
+:root[data-theme="light"] .text-zinc-500 { color: #7A6D84; }
+:root[data-theme="light"] .text-zinc-600 { color: #948AA0; }
+
+/* Subtle raised surfaces: white-on-dark becomes ink-on-light. */
+:root[data-theme="light"] .bg-white\/5 { background-color: rgba(36, 25, 46, 0.0375); }
+:root[data-theme="light"] .bg-white\/\[0\.03\] { background-color: rgba(36, 25, 46, 0.0225); }
+:root[data-theme="light"] .bg-white\/\[0\.06\] { background-color: rgba(36, 25, 46, 0.045); }
+:root[data-theme="light"] .bg-white\/\[0\.02\] { background-color: rgba(36, 25, 46, 0.015); }
+:root[data-theme="light"] .bg-white\/10 { background-color: rgba(36, 25, 46, 0.075); }
+
+/* Hairline borders. */
+:root[data-theme="light"] .border-white\/10 { border-color: rgba(36, 25, 46, 0.14); }
+:root[data-theme="light"] .border-white\/8 { border-color: rgba(36, 25, 46, 0.112); }
+:root[data-theme="light"] .border-white\/5 { border-color: rgba(36, 25, 46, 0.08); }
+:root[data-theme="light"] .border-white\/\[0\.08\] { border-color: rgba(36, 25, 46, 0.112); }
+:root[data-theme="light"] .border-white\/\[0\.07\] { border-color: rgba(36, 25, 46, 0.098); }
+:root[data-theme="light"] .border-white\/15 { border-color: rgba(36, 25, 46, 0.21); }
+:root[data-theme="light"] .border-white\/\[0\.09\] { border-color: rgba(36, 25, 46, 0.126); }
+:root[data-theme="light"] .border-white\/\[0\.06\] { border-color: rgba(36, 25, 46, 0.084); }
+:root[data-theme="light"] .border-white\/12 { border-color: rgba(36, 25, 46, 0.168); }
+:root[data-theme="light"] .divide-white\/\[0\.06\] > * + * { border-color: rgba(36, 25, 46, 0.10); }
+
+/* Hover states stay hover states. */
+:root[data-theme="light"] .hover\:bg-white\/5:hover { background-color: rgba(36, 25, 46, 0.045); }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.02\]:hover { background-color: rgba(36, 25, 46, 0.018); }
+:root[data-theme="light"] .hover\:bg-white\/10:hover { background-color: rgba(36, 25, 46, 0.09); }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.03\]:hover { background-color: rgba(36, 25, 46, 0.027); }
+:root[data-theme="light"] .hover\:bg-white\/30:hover { background-color: rgba(36, 25, 46, 0.27); }
+:root[data-theme="light"] .hover\:border-white\/20:hover { border-color: rgba(36, 25, 46, 0.24); }
+:root[data-theme="light"] .hover\:border-white\/25:hover { border-color: rgba(36, 25, 46, 0.3); }
+
+/* Panels that hard-code the dark palette. */
+:root[data-theme="light"] .bg-\[\#0D0A14\] { background-color: var(--background); }
+:root[data-theme="light"] .bg-\[\#171226\] { background-color: var(--card); }
+:root[data-theme="light"] .bg-\[\#1C1630\] { background-color: #F2EBE6; }
+:root[data-theme="light"] .from-\[\#171226\] { --tw-gradient-from: var(--card); }
+:root[data-theme="light"] .to-\[\#171226\] { --tw-gradient-to: var(--card); }
+:root[data-theme="light"] .border-\[\#0D0A14\] { border-color: rgba(36, 25, 46, 0.12); }
+
+/* The landing page's stage lighting. The inline gradients are tuned to glow
+   against a near-black page; at that strength on a warm white one they turn
+   the whole interface muddy, so the light theme gets a much fainter wash. */
+:root[data-theme="light"] .stage-glow {
+  background:
+    radial-gradient(52% 44% at 64% 36%, rgba(255, 138, 76, 0.10) 0%, transparent 70%),
+    radial-gradient(44% 40% at 26% 74%, rgba(142, 139, 245, 0.08) 0%, transparent 72%) !important;
+}
+
+/* Text hard-coded to white. Forty places assume a dark ground; on a light one
+   they vanish entirely — the logo lost its first half and the trust pill went
+   blank. Buttons are excluded: their fill stays dark, so white on top is still
+   correct there. */
+:root[data-theme="light"] .text-white:not(button):not(a[class*="bg-primary"]):not([class*="bg-primary"]):not([class*="bg-gradient"]) {
+  color: var(--foreground);
+}
+:root[data-theme="light"] .text-\[\#F4EFF7\] {
+  color: var(--foreground);
+}
+
+/* `--bg` is a second name for the page ground, used by the scrim gradients
+   that fade the high-quality photography into the page. It is separate from
+   --background and was still holding the dark value, which laid a dark wash
+   diagonally across the whole light interface. */
+:root[data-theme="light"] {
+  --bg: #FBF7F4;
+}
+
+/* The hero headline is a clipped gradient running white → pale lilac → grey.
+   Every stop of it is designed to sit on a near-black page; on a warm white
+   one the top two thirds are simply not there, which left the headline looking
+   half-erased. The light theme runs the same gradient in reverse ink. */
+:root[data-theme="light"] .text-gradient-soft {
+  /* background-image, NOT the `background` shorthand. The shorthand resets
+     background-clip to border-box, which un-clips the gradient from the text
+     and paints it as a solid grey slab over the headline. */
+  background-image: linear-gradient(180deg, #24192E 0%, #2E2039 38%, #6B5F73 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+/* `hover:text-white` is the standard hover across the nav and sidebar. On a
+   light ground it makes the link disappear at the exact moment the pointer is
+   on it. */
+:root[data-theme="light"] .hover\:text-white:hover {
+  color: var(--foreground);
+}
+
+/* The two hero buttons are frosted glass tuned for a dark page: a translucent
+   white fill on `.btn-glass`, and a pale apricot wash with near-white text on
+   `.btn-glass-primary`. On a warm white ground the fills vanish and the label
+   with them, so the primary call to action read as an empty peach rectangle. */
+:root[data-theme="light"] .btn-glass {
+  background: rgba(36, 25, 46, 0.04);
+  border-color: rgba(36, 25, 46, 0.14);
+  color: var(--foreground);
+}
+:root[data-theme="light"] .btn-glass:hover {
+  background: rgba(36, 25, 46, 0.08);
+  border-color: rgba(36, 25, 46, 0.24);
+}
+:root[data-theme="light"] .btn-glass-primary {
+  /* Solid rather than translucent — the whole point of the primary action is
+     that it is unmissable, and a wash of apricot on white is not. */
+  background: var(--primary);
+  border-color: color-mix(in oklab, var(--primary) 70%, #2A1400);
+  color: var(--primary-foreground);
+}
+:root[data-theme="light"] .btn-glass-primary:hover {
+  background: color-mix(in oklab, var(--primary) 88%, #2A1400);
+  border-color: color-mix(in oklab, var(--primary) 60%, #2A1400);
+}
+
+/* The floating navbar. Both its states are dark glass — a near-black pill at
+   82% opacity when scrolled, and #171226/40 before that — so on a light page
+   it hung there as a dark bar with dark links inside it, unreadable at both
+   ends. The links themselves are text-zinc-400, which the block above already
+   darkens, so they only needed the surface behind them to change. */
+:root[data-theme="light"] .glass-strong {
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 8px 40px rgba(36, 25, 46, 0.10) !important;
+}
+:root[data-theme="light"] nav.bg-\[\#171226\]\/40 {
+  background: rgba(255, 255, 255, 0.72) !important;
+}
+
+/* The hover pill behind a nav link, and the same trick wherever it appears:
+   a white wash that is invisible on white. */
+:root[data-theme="light"] .bg-white\/\[0\.06\] {
+  background-color: rgba(36, 25, 46, 0.06);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   The public home page — "The Bowl".
+   Scoped under .pp so nothing here reaches the signed-in app.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* Lenis's own recommended rules: native smooth scrolling must be off while it
+   drives the scroll, or the two fight and the page judders. */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+
+.pp {
+  --pp-ink: #0D0A14;
+  --pp-ink-2: #171220;
+  --pp-paper: #F3ECE1;
+  --pp-paper-2: #EAE1D3;
+  --pp-text-dark: #1D1621;
+  --pp-glaze: #E8875A;
+  --pp-apricot: #FFAE6D;
+  --pp-honey: #F2C26B;
+  --pp-safe: #8FD9A8;
+  --pp-caution: #FFD98E;
+  --pp-toxic: #FF5F6D;
+  color: #F6EFE6;
+  font-family: var(--font-body), system-ui, sans-serif;
+  /* Nothing on the home page may widen the layout viewport on a phone. */
+  overflow-x: clip;
+}
+
+.pp-display { font-family: var(--font-pp-display), Georgia, serif; font-weight: 420; letter-spacing: -0.02em; }
+.pp-display em { font-style: italic; font-weight: 380; color: var(--pp-apricot); }
+.pp-paper .pp-display em { color: #C9612F; }
+.pp-mono { font-family: var(--font-pp-mono), ui-monospace, monospace; }
+.pp-label { font-family: var(--font-pp-label), "Arial Black", sans-serif; letter-spacing: -0.01em; }
+
+/* Paper sections: opaque, warm, with a rim-shaped top edge — the page rises
+   like the inside of the bowl. */
+.pp-paper { background: var(--pp-paper); color: var(--pp-text-dark); position: relative; }
+.pp-paper-rim { position: absolute; left: 0; right: 0; width: 100%; top: -1px; height: 64px; transform: translateY(-99%); pointer-events: none; }
+
+/* Scroll reveals. Only opacity and transform animate — never layout, and no
+   blur: a blur filter on large text forces a costly repaint while scrolling
+   (measured). The hero, which animates once on load, keeps its blur. */
+.pp-reveal { opacity: 0; transform: translate3d(0, 22px, 0);
+  transition: opacity .9s cubic-bezier(.16,1,.3,1), transform .9s cubic-bezier(.16,1,.3,1);
+  transition-delay: calc(var(--d, 0) * 80ms); }
+.pp-in .pp-reveal, .pp-reveal.pp-in { opacity: 1; transform: none; filter: none; }
+
+/* Headline words arrive like kibble settling: dropped, slightly turned, then still. */
+.pp-word { display: inline-block; opacity: 0; transform: translate3d(0, -0.45em, 0) rotate(-4deg);
+  transition: opacity .8s cubic-bezier(.16,1,.3,1), transform 1s cubic-bezier(.34,1.4,.5,1);
+  transition-delay: calc(var(--w, 0) * 70ms + var(--base, 0ms)); }
+.pp-in .pp-word { opacity: 1; transform: none; filter: none; }
+
+/* The hero is the LCP element: it reveals in pure CSS, without waiting for JS. */
+@keyframes pp-rise { from { opacity: 0; transform: translate3d(0, -0.45em, 0) rotate(-4deg); filter: blur(6px); } to { opacity: 1; transform: none; filter: none; } }
+.pp-hero-word { display: inline-block; animation: pp-rise 1s cubic-bezier(.34,1.3,.5,1) both; animation-delay: calc(var(--w, 0) * 80ms + 150ms); }
+@keyframes pp-fade { from { opacity: 0; transform: translate3d(0, 12px, 0); } to { opacity: 1; transform: none; } }
+.pp-hero-fade { animation: pp-fade .9s cubic-bezier(.16,1,.3,1) both; animation-delay: calc(var(--d, 0) * 90ms + 600ms); }
+
+/* Nutrition-facts panel — the motif borrowed from every bag of pet food. */
+.pp-facts { background: #FBF7F0; color: #120D10; border: 2px solid #120D10; padding: 14px 16px 12px; }
+.pp-facts .rule-xl { height: 9px; background: #120D10; margin: 6px 0; }
+.pp-facts .rule-md { height: 4px; background: #120D10; margin: 5px 0; }
+.pp-facts .rule { height: 1px; background: #120D10; margin: 5px 0; }
+
+/* Magnetic pill buttons. */
+.pp-btn { display: inline-flex; align-items: center; gap: .5rem; height: 3rem; padding: 0 1.4rem; border-radius: 999px;
+  font-weight: 600; font-size: .95rem; transition: transform .35s cubic-bezier(.16,1,.3,1), background-color .25s, box-shadow .35s; will-change: transform; }
+.pp-btn-primary { background: var(--pp-apricot); color: #24140A; box-shadow: 0 10px 30px -10px rgba(255,174,109,.55); }
+.pp-btn-primary:hover { background: #FFBE86; box-shadow: 0 14px 40px -12px rgba(255,174,109,.7); }
+.pp-btn-ghost { border: 1px solid rgba(246,239,230,.22); color: #F6EFE6; }
+.pp-btn-ghost:hover { background: rgba(246,239,230,.07); }
+.pp-paper .pp-btn-ghost { border-color: rgba(29,22,33,.25); color: var(--pp-text-dark); }
+.pp-paper .pp-btn-ghost:hover { background: rgba(29,22,33,.05); }
+
+/* A breathing scroll cue — gated so it only animates while visible. */
+@keyframes pp-cue { 0%,100% { transform: translateY(0); opacity: .9 } 50% { transform: translateY(6px); opacity: .4 } }
+.pp-cue { animation: pp-cue 2.2s ease-in-out infinite; }
+
+/* Fine film grain over the dark scenes — a static texture, no blend modes. */
+.pp-grain { position: fixed; inset: 0; pointer-events: none; z-index: 1; opacity: .06;
+  background-image: url("/images/landing/grain.svg"); }
+
+/* Range slider in the planner. */
+.pp-range { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; cursor: pointer; }
+.pp-range::-webkit-slider-runnable-track { height: 2px; background: #120D10; }
+.pp-range::-moz-range-track { height: 2px; background: #120D10; }
+.pp-range::-webkit-slider-thumb { -webkit-appearance: none; width: 22px; height: 22px; margin-top: -10px; border-radius: 999px; background: var(--pp-glaze); border: 3px solid #FBF7F0; box-shadow: 0 0 0 2px #120D10; }
+.pp-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 999px; background: var(--pp-glaze); border: 3px solid #FBF7F0; box-shadow: 0 0 0 2px #120D10; }
+.pp-range:focus-visible { outline: 2px solid var(--pp-apricot); outline-offset: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-reveal, .pp-word, .pp-hero-word, .pp-hero-fade { opacity: 1 !important; transform: none !important; filter: none !important; animation: none !important; transition: none !important; }
+  .pp-cue { animation: none; }
+}
+html.reduce-motion .pp-reveal, html.reduce-motion .pp-word, html.reduce-motion .pp-hero-word, html.reduce-motion .pp-hero-fade {
+  opacity: 1 !important; transform: none !important; filter: none !important; animation: none !important; transition: none !important; }

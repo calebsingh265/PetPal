@@ -1,0 +1,1031 @@
+# Phase 5 — Implementation Phase Document
+
+**Worth 25% of the project — the largest single weighting. Due 9 November 2026.**
+
+The guidelines require five sections: Introduction, Coding, Testing, System
+Testing, Installation. The overall documentation list adds several items that
+belong here: code standardisation, code efficiency, error handling, validation
+checks, system security measures, cost estimation, reports, future scope,
+bibliography, appendices and glossary.
+
+Cover all of it. This is the phase where the marks are densest.
+
+---
+
+## Suggested length
+
+| Section | Pages |
+|---|---|
+| 5.1 Introduction | 2 |
+| 5.2 Coding | 14–20 |
+| 5.3 Testing | 8–10 |
+| 5.4 System Testing | 10–14 |
+| 5.5 Installation | 5–7 |
+| Additional required sections | 12–16 |
+| **Total** | **51–69** |
+
+---
+
+# 5.1 Introduction
+
+State:
+
+1. What implementation covered — turning the Phase 4 design into working,
+   deployed software
+2. The outcome — a live system at a public URL, with its actual scale
+3. What this document covers
+4. **What changed from the design, and why**
+
+## 5.1.1 The deviations section — do not skip this
+
+Most groups pretend the implementation matched the design exactly. It never does,
+and a marker knows that. Documenting deviations honestly, with reasons,
+demonstrates engineering judgement.
+
+Deviations actually made in this project:
+
+| Design said | Implementation does | Why |
+|---|---|---|
+| Browser calls the practice API directly | A server-side route calls it | The browser's same-origin policy began blocking every response |
+| One external data source | Four mirrors plus a bundled offline dataset | All mirrors failed simultaneously in production |
+| Professional record created by the client at sign-up | Created by a database trigger | No session exists at sign-up, so the write was always refused |
+| Reduce-motion implemented in CSS | Also carried into the animation library | CSS cannot stop JavaScript-driven animation |
+| Shaders compiled when first drawn (the three.js default) | Every shader compiled up front with `compileAsync` before the 3D scene is shown | A performance trace showed 400–700 ms freezes mid-scroll while the graphics driver linked each program |
+| One rendering quality for every device | Three quality tiers set from the device, and the pixel ratio lowered automatically under load | The same scene has to run on phones, integrated laptop graphics and desktops; one setting is too heavy for some and wasteful on others |
+| The 3D scene assumed WebGL would work | An error boundary and a software-renderer check fall back to a still poster | With WebGL disabled, the home page crashed outright |
+| Admin verification via the interface only | Requires a database policy as well | Without it the administrator's write was silently refused |
+| Row-level security policies alone protect each table | Policies **plus** column-level grants, value checks on insert, and a guard trigger on `vet_profiles` | A security audit showed policies control *which rows* but not *which columns* — any user could make themselves an administrator |
+| Dashboard health data shown as illustration | Two new tables, `pet_reminders` and `pet_weights`, and a page per pet | Showing every user the same invented pets and reminders broke NFR-19 |
+
+Each of these is a real finding. Write a short paragraph on each explaining what
+was observed, what was concluded and what was changed.
+
+## 5.1.2 Implementation statistics
+
+| Measure | Value |
+|---|---|
+| Application source | 12,900 lines of TypeScript / TSX |
+| Largest file | `app/(dashboard)/vet/page.tsx`, 828 lines; largest logic module `lib/food-safety.ts`, 771 lines |
+| Routes | 22 (20 pages, 2 route handlers: `/api/vets` and `/auth/callback`) |
+| Database tables | 9 |
+| Database functions | 7 |
+| Database triggers | 4 |
+| Row-level security policies | 32 |
+| Database indexes (besides primary keys) | 7 |
+| Food-safety entries | 88 |
+| Care guides | 20 |
+| Bundled veterinary practices | 189 |
+| Runtime dependencies | 34 |
+
+---
+
+# 5.2 Coding
+
+The guidelines require: complete project coding, comments and description of
+coding segments, standardisation, code efficiency, error handling, parameter
+passing, and validation checks.
+
+## 5.2.1 Development environment
+
+| Item | Version |
+|---|---|
+| Node.js | 20+ |
+| Package manager | npm |
+| Language | TypeScript 5 (strict) |
+| Framework | Next.js 16.2.9 |
+| Version control | Git / GitHub |
+| Editor | VS Code |
+| Linter | ESLint |
+
+## 5.2.2 Code organisation
+
+Reproduce the repository map and explain the three-way split: routing in `app/`,
+reusable interface in `components/`, interface-free logic in `lib/`. State the
+consequence: anything in `lib/` can be executed and verified without a browser,
+which is what made the testing in §5.3 possible.
+
+## 5.2.3 Coding standards applied
+
+| Standard | Rule | Enforcement |
+|---|---|---|
+| Type safety | Strict TypeScript; no implicit `any` | `tsc --noEmit` in the build |
+| Linting | Zero errors | ESLint |
+| Naming | `camelCase` values, `PascalCase` components and types | Convention |
+| File naming | One component per file, named for it | Convention |
+| Imports | Absolute via `@/` | `tsconfig.json` path alias |
+| Comments | Explain *why*, not *what* | Review |
+| Function size | One responsibility | Review |
+
+### The commenting standard, stated properly
+
+This project uses an unusual and defensible commenting rule, and it is worth
+explaining because a marker will notice the comment density:
+
+> A comment explains **why** the code is as it is, particularly where the obvious
+> approach was tried and failed. Comments that restate the code are omitted.
+
+Give a real example from the source:
+
+```ts
+// One-directional, whole-phrase. The ALIAS must appear in the QUERY, never the
+// reverse. Reversing this caused "chicken" to match the alias "chicken bones"
+// and report a safe food as TOXIC.
+```
+
+A reader who later "simplifies" that to a substring match reintroduces a safety
+defect. The comment is what prevents it.
+
+## 5.2.4 Code segments to include and describe
+
+Do **not** paste the whole codebase. Select segments that demonstrate technique,
+and for each give: the file, what it does, why it is written that way, and the
+notable detail.
+
+Recommended segments:
+
+| # | Segment | Demonstrates |
+|---|---|---|
+| 1 | `computePlan()` in `lib/nutrition.ts` | Algorithm implementation; single source of truth |
+| 2 | Alias matching in `lib/food-safety.ts` | Defect analysis and correction |
+| 3 | `haversine()` in `lib/vets.ts` | Mathematical implementation |
+| 4 | The mirror-and-fallback loop in `app/api/vets/route.ts` | Resilience; graceful degradation |
+| 5 | `handle_new_user()` in `supabase/schema.sql` | Database trigger; security context |
+| 6 | The `answers` insert policy | Declarative access control |
+| 7 | `packKibble()` in `components/landing/scene/bowlShape.ts` | Advanced algorithm: rejection sampling inside a real profile, seeded random numbers, ordering for display |
+| 8 | `Warmup` in `components/landing/scene/BowlCanvas.tsx` | Asynchronous code; a performance defect diagnosed from a trace and fixed (D-24) |
+| 9 | `PreferencesProvider` | Cross-cutting concern applied at the root |
+| 10 | `postAnswer()` in the vet console | Optimistic update with rollback on failure |
+
+For each, present the code in a monospaced block with line numbers, then a
+paragraph of explanation. Roughly one page per segment.
+
+## 5.2.5 Code efficiency
+
+The guidelines list this explicitly. Give concrete measures taken, not
+generalities.
+
+| Technique | Where | Effect |
+|---|---|---|
+| Database indexes on filtered and sorted columns | 7 indexes | Avoids full table scans |
+| Stored derived count instead of a per-row subquery | `questions.answer_count` | One query instead of N |
+| Response caching | `/api/vets`, 10 minutes | A donated public service is not queried per keystroke |
+| Kibble positions computed once | `packKibble()` | Packing runs once per quality tier and is memoised, never per frame |
+| One instanced draw for all kibble | `Kibble.tsx` (`InstancedMesh`) | Up to 420 pieces in a single GPU submission |
+| Only moving pieces are updated | `Kibble.tsx` (`active` set) | A settled bowl costs no CPU per frame |
+| Typed arrays, no allocation in the frame loop | `Kibble.tsx` | No garbage-collection pauses mid-animation |
+| Per-frame values kept outside React | `components/landing/story.ts` | Scrolling and slider moves never re-render the component tree |
+| Quality tiers | `Landing.tsx`, `BowlCanvas.tsx` | Pixel-ratio cap (2 / 1.5 / 1), kibble count, shadows and anti-aliasing scale with the device |
+| Pixel ratio lowered under load | `PerformanceMonitor` in `BowlCanvas.tsx` | Fill cost drops automatically when frames slow down |
+| Shaders compiled before the scene is shown | `Warmup` in `BowlCanvas.tsx` | Removed 400–700 ms freezes mid-scroll |
+| Render loop paused while covered | `BowlCanvas.tsx` (`frameloop="never"`) | No drawing while an opaque section hides the scene |
+| No blur over the live canvas or in scroll reveals | `Navbar.tsx`, `globals.css` | Removes a repaint cost measured while scrolling |
+| Code splitting by route | Next.js | Only the current page's code is downloaded |
+| 3D loaded after first paint | `Landing.tsx` (`next/dynamic`, mounted on first interaction or idle) | The text and a CSS poster appear before any 3D code is downloaded |
+
+### A measured example worth including
+
+> Scrolling the home page froze for 400–700 ms at a time. A browser performance
+> trace showed the time was spent in the graphics driver linking shader programs
+> (`GetProgramiv`) the first time each material was drawn. Compiling every
+> shader up front with `renderer.compileAsync()` — with each food model mounted
+> once out of sight — removed the freezes. Afterwards the 95th-percentile frame
+> time while scrolling was about 17.6 ms (≈ 60 frames a second) on a laptop with
+> Intel Iris Plus integrated graphics.
+
+Report the follow-up honestly too: later runs on the same laptop read about
+23 ms, but a blank page measured 23.7 ms in the same session — the machine was
+throttled, and the page added no measurable cost. Say that the figures come from
+one machine. Full account in `01-SYSTEM-REFERENCE.md` §9.13.
+
+## 5.2.6 Error handling
+
+State the strategy, then give the implementation with examples.
+
+**Strategy:** every failure is caught at the boundary where it occurs, translated
+into a message that states what went wrong and what to do, and — critically —
+**never reported as a success.**
+
+| Class | Handling | Example in the system |
+|---|---|---|
+| Invalid input | Prevented where possible, else validated with a specific message | Weight slider cannot leave the species range |
+| Network failure | Caught; alternatives tried; degraded; reported | Four mirrors → bundled data → explicit error |
+| Database unreachable | Caught; offline features continue; `/setup` diagnoses | "Failed to fetch" translated into a readable cause |
+| Permission refused | Reported accurately | Unverified answer attempt states the likely cause |
+| Optimistic update failure | **Rolled back**, then reported | Verifying a vet; toggling availability; deleting a saved reply |
+| A write the database silently ignores | Ask for the affected rows back (`.select()`), and report success only if a row came back | Removing a wall post; deleting a pet, weigh-in or reminder |
+| Programming error | Caught by type checking before runtime | — |
+
+### The rollback pattern — include this code
+
+Several controls update the screen immediately for responsiveness and then write
+to the database. If the write fails, the screen must go back:
+
+```ts
+const before = vets                                   // remember the old state
+setVets(v => v.map(x => x.id === id ? { ...x, verified } : x))   // optimistic
+
+const { error } = await supabase.from('vet_profiles')
+  .update({ verified }).eq('id', id)
+
+if (error) {
+  setVets(before)                                     // roll back
+  toast.error('Couldn't verify that vet', { description: error.message })
+  return
+}
+toast.success('Vet verified')
+```
+
+Explain why this matters: an earlier version of this control updated only local
+state and always reported success. An administrator could click Verify on a
+professional, be told it worked, and nothing would have changed.
+
+## 5.2.7 Parameter passing
+
+The guidelines list this. Cover:
+
+- **By value vs by reference** in JavaScript: primitives by value, objects and
+  arrays by reference. State the consequence — a function that mutates an object
+  argument affects the caller — and the convention adopted: functions in `lib/`
+  are pure and do not mutate their arguments.
+- **React props** — data passed down the component tree; one-directional.
+- **Function arguments with defaults** — e.g. `fetchNearbyVets(centre,
+  radiusM = 12000, signal?)`.
+- **Destructuring** — used to name the fields a function actually uses.
+- **A shared object passed by reference** — the home page's `story` object
+  (`components/landing/story.ts`) is one mutable object: the scroll handler and
+  the interactive sections write to it, and the 3D frame loop reads it. This is a
+  deliberate, contained exception to the "pure functions" convention, because
+  the alternative — React state — would re-render the page on every scroll tick.
+- **SQL parameters** — Supabase queries are parameterised, never string-
+  concatenated. State that this is what prevents SQL injection.
+
+## 5.2.8 Validation checks
+
+Present the two-tier table. This is a strong section because it shows the same
+rule enforced twice, deliberately.
+
+| Rule | Interface check | Database check |
+|---|---|---|
+| Password ≥ 8 characters | Before submit | Supabase Auth |
+| Professional supplies a registration number | Before submit | — |
+| Pet name 1–40 characters | Before submit | `check (char_length(btrim(name)) between 1 and 40)` |
+| Pet weight > 0 | Before submit | `check (weight is null or weight > 0)` |
+| Pet weight plausible for the species (e.g. ≤ 15 kg for a cat) | Before submit (`MAX_KG` in `lib/health.ts`) | Only the overall limit: `weight <= 200` |
+| Weigh-in not in the future | Before submit | `check (measured_on <= current_date + 1)` — a day's slack for time zones |
+| Reminder title 2–80; due today or later | Before submit | Title length `check`; the date rule is interface-only |
+| Species is one of nine | Button set only | `check (species in (...))` |
+| Community post 10–280 characters | Character counter | `check (char_length between 10 and 280)` |
+| Question title 10–140 | Counter | `check` constraint |
+| Answer body ≥ 20 | Counter and disabled button | `check` constraint |
+| Saved reply title 2–80 | Validated on save | `check` constraint |
+| Only a verified vet may answer | Composer hidden | **RLS policy** |
+| Only an owner may read their pets | Query scoped | **RLS policy** |
+| A user cannot change their own role | No control offered | **Column-level grant** (only `display_name`, `avatar_url`) |
+| A vet cannot verify themselves | No control offered; registration number read-only | **Insert policy** (`verified = false`) and **trigger** `guard_vet_profile` |
+| A new wall post starts at zero hearts | Not sent by the form | **Insert policy** `hearts = 0` |
+| Latitude within ±90 | — | API route guard clause |
+
+**State the principle explicitly:** interface validation exists for helpfulness —
+telling the user immediately. Database validation exists for correctness — it
+holds even if the interface is bypassed entirely. Neither replaces the other.
+
+---
+
+# 5.3 Testing
+
+## 5.3.1 Testing strategy
+
+State the approach honestly:
+
+> Testing was carried out at four levels: static analysis on every build, unit
+> verification of the pure logic modules, integration verification of the
+> database schema against a real PostgreSQL engine, and system testing of the
+> deployed application in a browser. There is no automated regression suite in
+> the repository; this is recorded as a limitation in §5.6 and as future work in
+> §5.10.
+
+Being straight about the absence of a CI suite is better than implying one
+exists.
+
+## 5.3.2 Testing levels
+
+| Level | Scope | Method |
+|---|---|---|
+| Static | Whole codebase | TypeScript strict checking, ESLint, on every build |
+| Unit | Pure functions in `lib/` | Purpose-written scripts run under Node |
+| Integration | Database schema, triggers, policies, constraints | Executed against real PostgreSQL via PGlite |
+| System | Deployed application | Browser automation and manual walkthrough |
+| Acceptance | Against the requirements | Checklist per functional requirement |
+
+## 5.3.3 Testing techniques used
+
+Name them; the guidelines ask for techniques and strategies.
+
+| Technique | Applied to | Example |
+|---|---|---|
+| **Black-box** | Features by requirement | Does the practice finder return sorted results? |
+| **White-box** | Algorithms with known internals | Every branch of the alias matcher |
+| **Equivalence partitioning** | Numeric inputs | Weight: below range, in range, above range |
+| **Boundary value analysis** | Constrained fields | Post text at 9, 10, 280 and 281 characters |
+| **Negative testing** | Constraints | Deliberately invalid rows rejected |
+| **Regression** | After each fix | Re-ran the 43 food-safety cases |
+| **Integration** | Trigger behaviour | Insert an account, assert two rows appear |
+| **Exploratory** | Whole app | Browser walkthrough of every screen |
+| **Cross-browser** | Layout | Chrome, Firefox, Safari, Edge |
+| **Responsive** | Layout | 375px to 2560px |
+
+## 5.3.4 Test plan
+
+| Item | Detail |
+|---|---|
+| Objectives | Verify every functional requirement; verify constraints hold; verify graceful degradation |
+| Scope | All 22 routes, 9 tables, 7 functions, 32 policies |
+| Environment | Local development, and the production deployment |
+| Entry criteria | Feature complete; build passing |
+| Exit criteria | All planned cases executed; no open severity-1 or severity-2 defects |
+| Severity scale | 1 data loss or wrong health-relevant output · 2 feature unusable · 3 feature impaired · 4 cosmetic |
+
+---
+
+# 5.4 System Testing
+
+## 5.4.1 Test case format
+
+Use this table for every case:
+
+| Field | |
+|---|---|
+| Test Case ID | TC-xx |
+| Requirement | FR-xx |
+| Objective | |
+| Preconditions | |
+| Test data | |
+| Steps | 1… 2… |
+| Expected result | |
+| Actual result | |
+| Status | Pass / Fail |
+| Severity if failed | |
+
+## 5.4.2 Unit test cases
+
+### Nutrition
+
+| ID | Input | Expected | Actual | Status |
+|---|---|---|---|---|
+| TC-01 | Dog, 12kg, adult, normal, ideal | Calorie target per RER/MER | 722 kcal/day | Pass |
+| TC-02 | Cat, 4.5kg, adult, normal, ideal | Lower, species factor 0.9 | 311 kcal/day | Pass |
+| TC-03 | Dog, 12kg, **puppy**, normal, ideal | Approximately double TC-01 | 1444 kcal/day | Pass |
+| TC-04 | Weight below species minimum | Constrained to the minimum | Constrained | Pass |
+| TC-05 | Weight above species maximum | Constrained to the maximum | Constrained | Pass |
+| TC-06 | Same input, planner vs home page Portion Facts panel | Identical | Identical | Pass |
+| TC-42 | Dog, 12kg, **senior**, normal, ideal | Less than TC-01 (factor 0.9) | 650 kcal/day | Pass |
+| TC-43 | Dog, 12kg, adult, normal, body condition 1 / 2 / 4 / 5 | Four different results | 867 / 794 / 650 / 578 kcal/day | Pass |
+| TC-44 | Reptile, adult | 1 meal per day | 1 | Pass |
+| TC-45 | Home page Portion Facts panel as it opens: dog, 12kg, adult, moderate | Same as the planner (TC-01) | 722 kcal/day, 2 × 103 g | Pass |
+
+TC-45 used to check the old landing page's hero card (12.4 kg, 740 kcal — it
+had shown a typed-in "742"); that card went with the old page, and the panel
+that replaced it calls `computePlan()` directly.
+
+TC-42 and TC-43 guard two corrections: seniors used to get a factor of 1.1 —
+more food than an adult — and body-condition scores 1 and 2 (and 4 and 5) used
+to give identical plans.
+
+### Wellness
+
+| ID | Input | Expected | Actual | Status |
+|---|---|---|---|---|
+| TC-46 | Best answer to every question | 100, "Thriving" | 100, Thriving | Pass |
+| TC-47 | Best answers, except "Barely eating" | "See a vet", naming the sign | See a vet | Pass |
+| TC-48 | Body shape "Ribs, spine or hips stick out" | Flagged as visibly underweight; "See a vet" | See a vet | Pass |
+
+TC-47 is the regression for a real defect (D-18): the score was a plain average,
+so a pet that was not eating could still be told it was thriving.
+
+TC-03 is a good case to highlight: it verifies the life-stage multiplier is
+applied, and the expected relationship (a growing animal needing roughly twice
+maintenance) is independently checkable against veterinary literature.
+
+### Food safety — the regression suite
+
+**43 test cases.** Present the important ones:
+
+| ID | Query | Expected | Actual | Status |
+|---|---|---|---|---|
+| TC-07 | "chocolate" | Toxic, with reason | Toxic | Pass |
+| TC-08 | "chicken" | **Safe** | Safe | Pass |
+| TC-09 | "chicken bones" | Caution/Toxic | Correct verdict | Pass |
+| TC-10 | "grapes" | Toxic | Toxic | Pass |
+| TC-11 | "cat" | Must not match "catnip" | No false match | Pass |
+| TC-12 | "xyzzy" (not in database) | **No entry stated; no verdict inferred** | No entry | Pass |
+| TC-13 | "lily" with species = cat | Toxic, species-specific | Correct | Pass |
+| TC-49 | "peanut butter" | Caution — same entry as "xylitol free peanut butter" | Caution | Pass |
+| TC-50 | "my dog ate a weed" | Not reported as cannabis | No cannabis match | Pass |
+
+**TC-08 is the headline case.** Document it fully with the defect history: it
+previously returned **TOXIC** for an ordinary safe food, because the matcher
+tested whether the alias *contained* the query rather than the reverse. Include
+the before and after code and the reasoning. This single test case demonstrates
+defect discovery, root-cause analysis, correction and regression protection.
+
+### Distance calculation
+
+| ID | Input | Expected | Status |
+|---|---|---|---|
+| TC-14 | Same point twice | 0 km | Pass |
+| TC-15 | Two known cities | Matches published great-circle distance | Pass |
+
+## 5.4.3 Integration test cases — the database
+
+Executed by running `supabase/schema.sql` against a real PostgreSQL engine
+(PGlite) with Supabase's `auth` schema stubbed.
+
+| ID | Test | Expected | Actual | Status |
+|---|---|---|---|---|
+| TC-16 | Execute the schema | All objects created | 9 tables, 7 functions, 32 policies | Pass |
+| TC-17 | Execute it a second time | Succeeds; idempotent | Succeeds | Pass |
+| TC-18 | Insert an account | Profile row created by trigger | Created, correct role | Pass |
+| TC-19 | Insert a **professional** account **with no session** | Professional record created, `verified = false` | Created | Pass |
+| TC-20 | Insert an answer | `answer_count` 0 → 1 | 1 | Pass |
+| TC-21 | Delete that answer | `answer_count` 1 → 0 | 0 | Pass |
+| TC-22 | `increment_hearts` twice | 0 → 2 | 2 | Pass |
+| TC-23 | Answer body under 20 characters | Rejected | Rejected | Pass |
+| TC-24 | Species = "dragon" | Rejected | Rejected | Pass |
+| TC-25 | Pet weight = −5 | Rejected | Rejected | Pass |
+
+**TC-19 is the significant one.** It reproduces exactly the condition that broke
+the original implementation: no session exists, so `auth.uid()` is null. The
+client-side insert failed here every time. Verifying that the trigger succeeds
+under the same condition proves the fix addresses the actual cause.
+
+### Security rules — the current schema
+
+A later audit found that several policies controlled *which rows* a user could
+touch but not *which columns* or *which values* (see `01-SYSTEM-REFERENCE.md`
+§10.7). After the fix, an automated script ran the real `schema.sql` in PGlite
+and made **49 checks — all passing**. They include each attack below, run as a
+signed-in user, an anonymous visitor or an administrator as stated; the attacks
+**succeeded against the old schema**. The table lists the cases that matter for
+the write-up; the remaining checks cover the sign-up trigger, the answer
+counter, hearts and normal owner actions. The script is
+`tests/schema.test.mjs`, and `npm test` re-runs it, so these cases can be
+demonstrated live.
+
+| ID | Test | Expected | Actual | Status |
+|---|---|---|---|---|
+| TC-51 | Owner sets own `profiles.role` to `admin` | Refused | Refused | Pass |
+| TC-52 | Owner changes own `display_name` | Allowed | Allowed | Pass |
+| TC-53 | Sign up with `role: admin` in the sign-up metadata | Profile created as `user` | `user` | Pass |
+| TC-54 | Owner inserts a `vet_profiles` row with `verified = true` | Refused | Refused | Pass |
+| TC-55 | Vet sets own `verified` to true; vet changes own `registration_no` | Both refused by the trigger | Refused | Pass |
+| TC-56 | Vet edits own bio and availability | Allowed | Allowed | Pass |
+| TC-57 | Admin sets a vet's `verified` to true | Allowed | Allowed | Pass |
+| TC-58 | Second vet signs up with the same registration number | Sign-up succeeds, unverified (the admin console flags it) | As expected | Pass |
+| TC-59 | Owner inserts a question with `answer_count = 5`; author rewrites `answer_count`; author rewords the title | All refused | Refused | Pass |
+| TC-60 | Author marks own question resolved | Allowed | Allowed | Pass |
+| TC-61 | Vet moves own answer to another question | Refused | Refused | Pass |
+| TC-62 | Anonymous wall post with `hearts = 9999` | Refused | Refused | Pass |
+| TC-63 | Normal user deletes a wall post; admin deletes a wall post | User: 0 rows; admin: deleted | As expected | Pass |
+| TC-64 | Another user adds a reminder or a weigh-in to someone else's pet | Both refused | Refused | Pass |
+| TC-65 | Pet name of only spaces; pet weight 500 kg | Both refused | Refused | Pass |
+| TC-66 | Weigh-ins 12.5 kg (10 days ago) then 12.1 kg (today); then a back-dated 20 kg (30 days ago); then delete the 12.1 entry | `pets.weight` = 12.1, stays 12.1, then 12.5 | As expected | Pass |
+| TC-67 | Weigh-in dated 30 days ahead | Refused | Refused | Pass |
+| TC-68 | `delete_my_account()` signed out; then signed in | Signed out: refused. Signed in: login, pets and weigh-ins removed; their question stays with `asker_id` null; no other account touched | As expected | Pass |
+
+Present TC-51 as the headline security finding: before the fix, one line in the
+browser console turned any account into an administrator.
+
+## 5.4.4 System test cases — the deployed application
+
+| ID | Requirement | Test | Expected | Status |
+|---|---|---|---|---|
+| TC-26 | FR-01 | Create an owner account | Account and profile created | Pass |
+| TC-27 | FR-02/04 | Create a professional account | Professional record created, unverified | Pass |
+| TC-28 | FR-05 | Sign in and out | Session created and cleared | Pass |
+| TC-29 | FR-08/09 | Add a pet; check visibility | Visible to owner only | Pass |
+| TC-30 | FR-13 | Full nutrition flow | Correct plan displayed | Pass |
+| TC-31 | FR-19 | Food safety verdict | Verdict, reason, action shown | Pass |
+| TC-32 | FR-25 | Practice finder, live | Real practices, distance-sorted | Pass |
+| TC-33 | FR-29 | Practice finder, all mirrors down | Bundled data with visible notice | Pass |
+| TC-34 | FR-31 | Unverified vet attempts to answer | Refused | Pass |
+| TC-35 | FR-31 | Verified vet answers | Posted; count incremented | Pass |
+| TC-36 | FR-43 | Administrator verifies a professional | `verified` becomes true | Pass |
+| TC-37 | FR-46 | Administrator looks for pet records | Not present | Pass |
+| TC-38 | FR-47 | Switch theme to light | Whole interface changes | Pass |
+| TC-39 | FR-48 | Change accent colour | Applied across the interface | Pass |
+| TC-40 | FR-49 | Enable reduce motion | Animation stops | Pass |
+| TC-41 | NFR-17 | Resize 375px → 2560px | Usable throughout | Pass |
+| TC-69 | NFR-19 | Sign up a new account, open the dashboard | No pets, reminders or chart the user did not create | |
+| TC-70 | FR-51 | Add a cat weighing 45 kg | Rejected with a message about kilograms | |
+| TC-71 | FR-10 | Edit a pet, then delete it (confirming) | Changes saved; pet and its records gone | |
+| TC-72 | FR-52/53 | Log two weigh-ins | Chart on the pet page and dashboard; pet's weight = latest | |
+| TC-73 | FR-54/55 | Add a reminder due today; tick it done | Shown on the dashboard, then gone from upcoming | |
+| TC-74 | FR-32 | Post an answer, reload Ask a Vet | Answer still there with the vet's name | |
+| TC-75 | FR-45 | Administrator removes a wall post, reloads | Post stays gone | |
+| TC-76 | FR-58 | Two professionals with the same registration number | Both flagged in Admin Panel → Vets | |
+| TC-77 | FR-56 | Change password in Settings | New password works at next sign-in | |
+| TC-78 | FR-06 | Follow a password-reset email | Lands on Settings → Password & Privacy, signed in | |
+| TC-79 | FR-57 | Delete account (type DELETE) | Signed out; sign-in no longer works | |
+| TC-80 | NFR-16 | Disable WebGL in the browser, open `/` | Still poster; every section readable and working; no crash | |
+| TC-81 | NFR-17 | Open `/` on a 375 px phone | Page laid out at the phone's width; no horizontal scrolling or zoomed-out view | |
+| TC-82 | NFR-02 | Record a performance trace while scrolling `/` | No long frames from shader linking; scene fades in only once compiled | |
+| TC-83 | NFR-14 | Turn on reduce motion, open `/` | No smooth-scroll library, no pointer parallax, kibble appears without falling, reveals shown at once | |
+
+TC-69 to TC-79 cover the features and fixes added late in the project, and
+TC-80 to TC-83 the redesigned home page. Fill in the Status column when you run
+them on the deployed site — do not mark them Pass until you have.
+
+## 5.4.5 Defects found, and their resolution
+
+**This is the most valuable subsection in the entire phase.** A defect log with
+root-cause analysis is direct evidence of engineering work.
+
+| ID | Defect | Sev | Root cause | Fix | Verified by |
+|---|---|---|---|---|---|
+| D-01 | Searching "chicken" returned TOXIC | **1** | Matcher tested alias-contains-query instead of query-contains-alias | One-directional whole-phrase matching with specificity ranking | TC-08, 43-case suite |
+| D-02 | Practice finder failed on every request | **2** | External API stopped sending CORS headers; browser blocked every response | Moved the call to a server-side route | TC-32 |
+| D-03 | Practice finder failed with all mirrors down | **2** | Single point of failure in a donated external service | Four mirrors plus a bundled dataset | TC-33 |
+| D-04 | Professional records never created | **2** | Client insert ran before a session existed; RLS refused it | Moved into a `SECURITY DEFINER` trigger | TC-19, TC-27 |
+| D-05 | Database schema would not execute at all | **1** | `$$` mangled to `$` when the file was generated, producing an unterminated dollar-quote | Corrected the quoting | TC-16 |
+| D-06 | Administrator "Verify" changed nothing | **2** | Updated local state only; no database write and no policy permitting one | Real write plus an admin policy | TC-36 |
+| D-07 | Reduce motion did not stop animation | **3** | CSS cannot affect JavaScript-driven animation | Carried the preference into the animation library | TC-40 |
+| D-08 | Accent colour setting had no effect | **3** | Saved to storage but never read back | Converted 127 hard-coded colour usages to a token; applied at runtime | TC-39 |
+| D-09 | 3D subject invisible on phones | **2** | Desktop composition placed its centre beyond the right edge in portrait | Separate portrait composition (the current home page keeps a separate camera set for tall screens) | TC-41 |
+| D-10 | Opening animation stuttered | **3** | Shape generation on the main thread in non-preemptible idle callbacks | Moved to a Web Worker (in the old particle landing page, since replaced) | Frame observation |
+| D-11 | Deployed site returned 404 on every route | **2** | Hosting framework preset wrong; served the static folder and discarded the application | Corrected the preset; rebuilt production | TC-26 |
+| D-12 | Fabricated data in several screens | **1** | Placeholder content left in place | Replaced with real data or honest absence | TC-37 and inspection |
+| D-13 | Any signed-in user could make themselves an administrator | **1** | The profile update policy limited *rows*, not *columns*, so `role` was writable from the browser console | Column-level grants: users may update only `display_name` and `avatar_url` | TC-51, TC-52 |
+| D-14 | Anyone could create a "verified" vet profile, and a vet could verify themselves | **1** | Insert policy did not check `verified`; update policy let a vet change any column of their own row | Insert requires `verified = false`; `guard_vet_profile` trigger | TC-54, TC-55, TC-57 |
+| D-15 | Admin "remove post" reported success but the post returned on refresh | **2** | No delete policy on `confessions`; the database refused silently and the screen did not check | Admin-only delete policy; success only once the deleted row comes back | TC-63, TC-75 |
+| D-16 | Ask a Vet answers disappeared on reload | **2** | Query embedded `vet_profiles` through a relationship that does not exist; the error was ignored | Two queries joined in the browser | TC-74 |
+| D-17 | Senior pets were fed more than adults | **1** | Senior life-stage factor was 1.1 | Changed to 0.9; body-condition factors graded per score | TC-42, TC-43 |
+| D-18 | Wellness check could say "Thriving" for a pet that was barely eating | **1** | Score was a plain average, so serious signs were outvoted | Red-flag answers force "See a vet" | TC-47, TC-48 |
+| D-19 | Add Pet said the pet "has joined your family!" when the save had failed | **2** | Success message shown regardless of the database result | Real error reported; success only after the insert returns the row | TC-70 and inspection |
+| D-20 | "Peanut butter" rated safe while "xylitol free peanut butter" rated caution | **1** | Two overlapping entries with contradicting verdicts | Merged into one caution entry for nut butters | TC-49 |
+| D-21 | A password-reset link led to a page with no way to set a password | **2** | Reset landed on Settings, which offered only "send another reset email" | Change-password form; the link now lands on it | TC-78 |
+| D-22 | With WebGL disabled, the home page crashed ("This page couldn't load") | **2** | Failing to create a WebGL context threw an error that nothing caught, so it took the whole page down rather than just the 3D | `SceneBoundary` error boundary and a WebGL check before mounting; the page falls back to its CSS poster | TC-80 |
+| D-23 | Phones laid the home page out 1440 px wide, zoomed out | **2** | The paper sections' curved top edge is an absolutely positioned SVG; such an SVG takes its intrinsic width (1440 from its `viewBox`) and ignores `left`/`right` for sizing | `width: 100%` on the SVG; `overflow-x: clip` on the page root | TC-81 |
+| D-24 | Scrolling the home page froze for 400–700 ms at a time | **3** | Shader programs linked synchronously on first draw (`GetProgramiv` in a performance trace) | Compile every shader up front with `compileAsync`; show the canvas only afterwards | TC-82, performance trace |
+
+**For the severity-1 defects, write a full root-cause narrative** — what was
+observed, how it was diagnosed, what the cause turned out to be, what was
+changed, and how the fix was verified. D-01, D-05 and D-13 are the strongest.
+
+### Why D-13 is worth documenting
+
+Every table had row-level security switched on, and the profile policy read
+"a user may update only their own row". That sounds safe, and it was tested —
+a user could not edit somebody else's profile. But the policy said nothing about
+*which columns*, and the role that decides administrator access lives in the
+user's own row. One line from the browser console —
+`update profiles set role = 'admin' where id = auth.uid()` — was enough. The
+lesson: a policy answers "which rows?"; it takes a separate rule (here,
+column-level grants) to answer "which columns?". The same gap explained D-14,
+and the questions, answers and wall-post fixes in `01-SYSTEM-REFERENCE.md`
+§10.7.
+
+### Why D-11 is worth documenting
+
+The build **succeeded** every time. `npm run build` completed without error, and
+the deployment reported success. The application was nonetheless entirely
+unreachable, because the hosting platform was configured to serve the project as
+a static site and therefore served the `public/` folder while discarding
+everything the build produced.
+
+The diagnostic that identified it: requesting `/globe.svg` — a file that exists
+only inside `public/` — returned **200**, while `/` returned **404**. That single
+pair of results distinguishes "the application is broken" from "the application
+is not being served", which are entirely different problems.
+
+## 5.4.6 Test summary
+
+| Level | Planned | Executed | Passed | Failed |
+|---|---|---|---|---|
+| Unit | | | | |
+| Integration | | | | |
+| System | | | | |
+| **Total** | | | | |
+
+Add a defect-by-severity chart and a requirements-coverage statement: every
+functional requirement has at least one test case.
+
+---
+
+# 5.5 Installation
+
+## 5.5.1 Prerequisites
+
+| Requirement | Detail |
+|---|---|
+| Accounts | GitHub, Supabase, Vercel — all free |
+| Software (deployment only) | A browser |
+| Software (local development) | Node.js 20+, Git |
+
+## 5.5.2 Deployment procedure
+
+Reference `SETUP.md`, which contains the full procedure, and reproduce it here in
+summary with screenshots of each step.
+
+1. Place the source on GitHub
+2. Create a Supabase project
+3. Run `supabase/schema.sql` in the SQL Editor
+4. Obtain the project URL and the publishable key
+5. Import the repository into Vercel
+6. **Set the framework preset to Next.js** — the cause of D-11
+7. Add the two environment variables to all environments
+8. Deploy
+9. Verify via `/setup` — it checks that all nine tables exist
+10. Create the first administrator
+
+**Upgrading an existing installation.** `schema.sql` is idempotent, so a
+database set up from an older version is upgraded by running the whole file
+again in the SQL Editor. Existing accounts, pets and posts are kept; the two
+health-record tables and the tightened security rules are added. `/setup` then
+names any table that is still missing.
+
+### 5.5.3 The first-administrator problem
+
+Document this honestly; it is a genuine design constraint:
+
+> The system has no interface for creating the first administrator, because any
+> such control would allow any user to grant themselves administrative rights.
+> The first administrator must therefore be created by a direct database
+> statement:
+>
+> ```sql
+> update profiles set role = 'admin' where email = '<address>';
+> ```
+>
+> The user must then sign out and back in, because the role is read when the
+> session is established. All subsequent administrative actions — including
+> verifying professionals — are performed through the interface.
+
+## 5.5.4 Configuration reference
+
+| Variable | Required | Purpose |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Database location |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Yes | Publishable key, constrained by RLS |
+
+**State the build-time behaviour:** these are compiled into the application at
+build time, so changing one has no effect until the project is rebuilt. Note also
+that redeploying a *preview* deployment does not change the production site.
+
+## 5.5.5 Local development
+
+```bash
+git clone <repository-url>
+cd demo-master
+npm install
+# create .env.local containing the two variables
+npm run dev          # http://localhost:3000
+```
+
+State that `.env.local` is deliberately excluded from version control, and that
+each developer therefore creates their own.
+
+## 5.5.6 Post-installation verification
+
+A checklist: `/setup` all green; sign-up produces a confirmation email (or signs
+straight in, if confirmation is switched off); sign-in works; a pet can be added
+and is visible only to its owner; a weigh-in and a reminder can be added on the
+pet's page and appear on the dashboard; nutrition returns a plan; food safety
+returns a verdict; the practice finder returns practices; the admin panel lists
+real accounts and can verify a professional.
+
+## 5.5.7 Maintenance procedures
+
+| Task | Frequency | Procedure |
+|---|---|---|
+| Verify professionals | As applications arrive | Admin Panel → Vets → Verify |
+| Moderate the community wall | As required | Admin Panel → Community |
+| Update the food-safety database | As needed | Edit `lib/food-safety.ts`, review, redeploy |
+| Refresh bundled practice data | Every few months | Re-extract from OpenStreetMap |
+| Keep the database awake | Weekly | A free Supabase project pauses after about a week idle |
+| Update dependencies | Periodically | `npm outdated`, then update and re-test |
+| Apply schema changes | After pulling a new version | Re-run the whole of `supabase/schema.sql`; check `/setup` |
+
+---
+
+# Additional required sections
+
+The overall documentation list in the guidelines includes several items not in
+the phase table. Put them here.
+
+## 5.6 System Security Measures
+
+### 5.6.1 Database and data security
+
+Summarise from Phase 4 §4.8, and give the evidence that it works: the policy
+matrix, and the test cases that verify it (TC-29 pet isolation, TC-34 verification
+gate, TC-37 administrator cannot see pets, and TC-51 to TC-68 for the holes
+closed after the security audit — self-promotion to administrator,
+self-verification, forged counts and hearts, records on other users' pets).
+
+### 5.6.2 User profiles and access rights
+
+The guidelines ask specifically for this. Present the access matrix:
+
+| Capability | Visitor | Owner | Vet (unverified) | Vet (verified) | Admin |
+|---|---|---|---|---|---|
+| Browse public pages | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Nutrition, food safety, find a vet, guides | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Create, edit and delete own pets; own weigh-ins and reminders | — | ✓ | ✓ | ✓ | ✓ |
+| Change own password; delete own account | — | ✓ | ✓ | ✓ | ✓ |
+| Change own role (through the app or the API) | — | — | — | — | — |
+| Change own verification or registration number | — | — | — | — | ✓ |
+| Post to the community wall | — | ✓ | ✓ | ✓ | ✓ |
+| Ask a question | — | ✓ | ✓ | ✓ | ✓ |
+| View the professional queue | — | — | ✓ | ✓ | — |
+| **Answer a question** | — | — | **—** | **✓** | — |
+| Saved replies | — | — | ✓ | ✓ | — |
+| Verify professionals | — | — | — | — | ✓ |
+| Remove community posts | — | — | — | — | ✓ |
+| View registered accounts | — | — | — | — | ✓ |
+| **View others' pets** | **—** | **—** | **—** | **—** | **—** |
+
+Highlight the last row: **nobody** can view another user's pets, including
+administrators. That is a deliberate privacy decision, not an omission.
+
+## 5.7 Cost Estimation with a Model
+
+The guidelines require cost estimation **along with a cost estimation model**.
+Naming and applying a model is what earns the marks.
+
+### 5.7.1 COCOMO (Basic, Organic)
+
+The project is small, the team is small, and the requirements were flexible —
+this is the Organic mode.
+
+```
+Effort  (person-months) = 2.4 × (KLOC)^1.05
+Duration    (months)    = 2.5 × (Effort)^0.38
+Average staff           = Effort ÷ Duration
+```
+
+With **12.900 KLOC**:
+
+```
+Effort   = 2.4 × 12.900^1.05
+         = 2.4 × 14.66  ≈ 35.2 person-months
+Duration = 2.5 × 35.2^0.38
+         = 2.5 × 3.87   ≈ 9.7 months
+Staff    = 35.2 ÷ 9.7   ≈ 3.6 people
+```
+
+(The count fell from 14,023 lines when the particle-animal landing page was
+replaced; its shape generator alone was 992 lines.)
+
+**Then compare with reality and discuss the gap honestly.** The actual project
+took a fraction of that. Give the reasons:
+
+- COCOMO was calibrated on projects written largely from scratch. A substantial
+  share of these 12,900 lines is configuration, generated component scaffolding
+  and declarative interface markup rather than novel logic.
+- Modern frameworks and managed services eliminate whole categories of work that
+  COCOMO assumes — authentication, session handling, hosting, database
+  administration.
+- The estimate excludes the effect of tooling that did not exist when the model
+  was calibrated.
+
+A candidate who applies a model, reports the number, and then explains why the
+number does not match reality demonstrates more understanding than one who
+reports a figure that happens to look plausible.
+
+### 5.7.2 Function Point Analysis (second model)
+
+Applying a second model and comparing is a strong move.
+
+| Component | Count | Complexity | Weight | FP |
+|---|---|---|---|---|
+| External Inputs | ~15 forms | Average | 4 | 60 |
+| External Outputs | ~12 result screens | Average | 5 | 60 |
+| External Inquiries | ~8 searches/lookups | Average | 4 | 32 |
+| Internal Logical Files | 9 tables | Average | 10 | 90 |
+| External Interface Files | 2 (Overpass, tiles) | Average | 7 | 14 |
+| **Unadjusted FP** | | | | **256** |
+
+Apply the 14 general system characteristics to get the adjustment factor, then
+report adjusted function points and derive effort using a productivity figure you
+state.
+
+### 5.7.3 Actual cost
+
+| Item | Cost |
+|---|---|
+| Software licences | R0 — all tools free or open source |
+| Hosting | R0 — free tier |
+| Database | R0 — free tier |
+| External data | R0 — open data |
+| Domain (optional) | ~R200/year |
+| Labour | Student effort; cost at a notional rate |
+| **Direct monetary cost** | **R0** |
+
+## 5.8 Reports
+
+The guidelines ask for sample report layouts. The system generates several
+outputs that function as reports — present each with a screenshot and a
+description of its layout, fields and source:
+
+1. **Feeding plan** — calorie target, portions, meal schedule, water, macro
+   profile
+2. **Food safety verdict** — item, verdict, reason, action, species scope
+3. **Wellness result** — score, band, guidance
+4. **Practice list** — name, distance, address, hours, contact
+5. **Question thread** — question with professional answers and verification
+   badges
+6. **Vet queue summary** — counts and the species breakdown chart
+7. **Administrative summary** — account count, post count, verified and
+   awaiting professionals, new accounts over the last 14 days, and questions by
+   species (answered vs waiting)
+8. **Pet health record** — a pet's weight log with its trend chart, and its
+   reminders with due and overdue dates
+9. **Dashboard summary** — the owner's pets, upcoming and overdue reminders, and
+   weight trends
+
+For each: purpose, audience, fields, source of each field, and layout.
+
+## 5.9 Debugging and Code Improvement
+
+The guidelines list this under Testing. Describe the methods actually used:
+
+| Method | Applied to |
+|---|---|
+| Browser developer console | JavaScript errors; the CORS diagnosis in D-02 |
+| Network inspection | Confirming which requests failed and why |
+| Server-side logging with per-attempt detail | The practice-finder mirror failures |
+| Executing the schema against a real engine | D-05, and all the trigger and constraint testing |
+| Purpose-written verification scripts | Nutrition, food-safety matching, geometry |
+| Browser performance traces | D-24: freezes traced to shader linking |
+| Type checking | Caught a large class of defects before runtime |
+| Differential diagnosis | D-11: comparing `/globe.svg` against `/` |
+| Instrumented diagnostics returned in the API response | Per-mirror outcome and timing |
+
+**Include one worked debugging narrative in full.** D-02 is the best:
+
+> The practice finder returned "We couldn't reach the practice directory" on
+> every request. The query was unchanged and had previously worked. Testing the
+> external service from a terminal produced a 406 response, suggesting the
+> service was rejecting the request — but the same test from a second network
+> produced a different result, indicating the terminal environment itself was
+> being blocked and was therefore not representative.
+>
+> Testing from the actual browser produced the decisive evidence in the console:
+>
+> ```
+> Access to fetch at 'https://overpass-api.de/api/interpreter' from origin
+> 'https://pet-pal-kappa.vercel.app' has been blocked by CORS policy: No
+> 'Access-Control-Allow-Origin' header is present on the requested resource.
+> ```
+>
+> The request was reaching the service and the response was returning; the
+> browser was refusing to let the page read it. Cross-origin restrictions are
+> enforced by browsers and not by servers, so the resolution was to move the
+> request to the application server, where the restriction does not apply.
+
+This narrative shows a hypothesis being formed, tested, discarded on evidence,
+and replaced — which is what debugging actually is.
+
+## 5.10 Future Scope and Enhancements
+
+Group by feasibility; prioritised realism scores better than a wish list.
+
+**Near term**
+- Automated regression suite (Vitest for logic, Playwright for flows) in CI,
+  including the PGlite schema checks
+- Expand the food-safety database beyond 88 entries, with sources cited per entry
+- Extend the bundled practice dataset beyond South Africa
+- Email or push notifications for reminders (they are currently in-app only)
+
+(Weight tracking with a trend chart, and reminders for vaccinations and
+medication, were on this list and have since been built.)
+
+**Medium term**
+- An administrator interface for editing the food-safety database, with review
+- Private follow-up between an owner and the professional who answered
+- Photo uploads for pets
+- Data export for an owner's own records
+- Multi-owner households sharing a pet
+
+**Longer term**
+- Native mobile applications
+- Integration with a veterinary register to automate verification
+- Practice-side integration for appointments
+- Localisation
+
+**Explicitly rejected, with reasons** — this is worth including:
+- **Practice ratings.** We have no rating data, and in an emergency context an
+  unsubstantiated rating is worse than none.
+- **Diagnosis.** Outside the system's competence and its stated scope.
+- **Advertising.** Would compromise the neutrality of the practice finder.
+
+## 5.11 Bibliography
+
+Use one citation style consistently. Include:
+
+- The module guidelines PDF
+- Schwalbe, K. *Information Technology Project Management*, 9th edition
+  (prescribed)
+- *Contemporary Project Management*, 5th edition (recommended)
+- Next.js documentation
+- React documentation
+- Supabase documentation
+- PostgreSQL documentation on row-level security
+- OpenStreetMap and the Overpass API
+- Three.js documentation
+- React Three Fiber and drei documentation
+- Lenis documentation
+- Your veterinary sources for the RER/MER formulas — **cite these carefully;**
+  they are the basis of a health-relevant calculation
+- Your toxicity sources
+- The photo sources and licences listed in `docs/image-credits.md` (Unsplash
+  License, Pexels License)
+
+## 5.12 Appendices
+
+- A: Complete source listing, or a link to the repository with the commit hash
+- B: Complete `supabase/schema.sql`
+- C: Full test case log
+- D: Interview instrument and raw responses
+- E: Meeting minutes with attendance
+- F: Gantt and PERT charts at full size
+- G: Screenshots of every screen, in both themes
+- H: `SETUP.md`
+
+## 5.13 Glossary
+
+Reproduce `01-SYSTEM-REFERENCE.md` Part 15, extended with any term you use.
+
+---
+
+# Final checklist before you submit Phase 5
+
+- [ ] Cover page, table of contents, numbering throughout
+- [ ] 5.1 Introduction **with the deviations table**
+- [ ] 5.2 Coding — environment, organisation, standards
+- [ ] 5.2 Ten code segments presented and explained
+- [ ] 5.2 **Code efficiency** with concrete measures
+- [ ] 5.2 **Error handling** with the rollback pattern
+- [ ] 5.2 **Parameter passing**
+- [ ] 5.2 **Validation checks**, two-tier table
+- [ ] 5.3 Testing strategy, levels and techniques named
+- [ ] 5.3 Test plan with entry and exit criteria
+- [ ] 5.4 Test cases in a consistent format
+- [ ] 5.4 Unit, integration and system cases all present
+- [ ] 5.4 **Defect log with root-cause analysis**
+- [ ] 5.4 Full narrative for each severity-1 defect
+- [ ] 5.4 Test summary with coverage statement
+- [ ] 5.5 Installation procedure with screenshots
+- [ ] 5.5 First-administrator procedure documented
+- [ ] 5.5 Upgrade procedure (re-run `schema.sql`) documented
+- [ ] 5.6 **Security measures** with the access matrix
+- [ ] 5.7 **Cost estimation with a named model** and the arithmetic
+- [ ] 5.7 Honest discussion of the model-versus-reality gap
+- [ ] 5.8 **Sample report layouts**
+- [ ] 5.9 Debugging, with one full narrative
+- [ ] 5.10 **Future scope**
+- [ ] 5.11 **Bibliography**
+- [ ] 5.12 **Appendices**
+- [ ] 5.13 **Glossary**
+- [ ] Live URL stated, and working on the day
+- [ ] Exported to PDF and checked
+
+---
+
+# One last thing — presentation counts for 50%
+
+The guidelines state plainly: *"Project Documentation carries 50% of the overall
+project and Project presentation by the individual student will carry 50%."*
+
+**Each student is assessed individually on the presentation.** Every member must
+be able to explain the whole system, not only their own part.
+
+Prepare for these, because they are the ones that get asked:
+
+1. Why did you choose this architecture?
+2. Walk me through what happens when a user signs up.
+3. How do you stop one user seeing another user's data? *(Answer: row-level
+   security in the database — and be able to say why the interface alone is not
+   enough.)*
+4. Show me the hardest bug you fixed and how you found it. *(Use D-01 or D-02.)*
+5. What would you do differently?
+6. What happens if the external map service is down? *(Four mirrors, then
+   bundled data, clearly labelled.)*
+7. Why is a vet not a separate account type?
+8. Is `answer_count` not redundant? *(Yes — a deliberate, justified
+   denormalisation maintained by a trigger.)*
+9. How did you test this?
+10. What are the limitations of your system? *(Have a real answer. Part 13 of
+    the System Reference lists twelve.)*
+11. Could a user make themselves an administrator? *(Not any more — and be ready
+    to explain that the original rules allowed it, how it was found, and that
+    column-level grants now prevent it: D-13.)*
+
+**Rehearse a live demonstration and have a fallback.** Free-tier databases pause
+after about a week idle, and the external practice directory has no uptime
+guarantee. Open the site the day before, and have screenshots ready in case the
+network in the room fails.
+
+---
+
+*End of the phase guides.*

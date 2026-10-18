@@ -1,0 +1,42 @@
+{
+  "dog-owner-floor": {
+    "width": 1600,
+    "height": 1067,
+    "alt": "A smiling young couple relaxing on a sofa at home, playing with their fluffy cream-coloured puppy"
+  },
+  "cat-window": {
+    "width": 1600,
+    "height": 1067,
+    "alt": "A fluffy ginger cat lounging on a woven mat beside a sunlit window"
+  },
+  "puppy-bowl": {
+    "width": 1600,
+    "height": 2024,
+    "alt": "A chocolate-brown puppy with a teal collar eating from a metal bowl and looking up at the camera"
+  },
+  "vet-exam": {
+    "width": 1600,
+    "height": 2400,
+    "alt": "A veterinarian in blue scrubs listening to a fluffy Pomeranian with a stethoscope"
+  },
+  "rabbit": {
+    "width": 1600,
+    "height": 2850,
+    "alt": "A brown and white pet rabbit sitting on a light wooden floor"
+  },
+  "parrot": {
+    "width": 1600,
+    "height": 1067,
+    "alt": "A blue budgie perched on an outstretched hand"
+  },
+  "dog-walk": {
+    "width": 1600,
+    "height": 2400,
+    "alt": "A golden retriever puppy walking towards the camera on a leash across autumn grass"
+  },
+  "kitten-hands": {
+    "width": 1600,
+    "height": 2400,
+    "alt": "A small ginger kitten cradled in a person’s hands"
+  }
+}

@@ -1,0 +1,1581 @@
+# PetPal — Complete Project Guide
+
+**What this document is for.**
+Everything you need to write the remaining documentation phases (Planning,
+Analysis, Design, Implementation) without having to read or understand the code.
+Every diagram you have to draw, every requirement you have to list, and every
+table you have to fill in is described here in plain language, with the real
+values taken from the actual system.
+
+**How to use it.** Jump to [Part 9](#part-9--what-to-write-in-each-phase) to see
+exactly which section of this guide feeds which section of your report.
+
+---
+
+## Contents
+
+1. [What PetPal is](#part-1--what-petpal-is)
+2. [The technology, explained simply](#part-2--the-technology-explained-simply)
+3. [Every folder and file](#part-3--every-folder-and-file)
+4. [Every screen](#part-4--every-screen)
+5. [The database](#part-5--the-database)
+6. [How data moves (for your DFDs)](#part-6--how-data-moves-for-your-dfds)
+7. [Requirements, ready to paste](#part-7--requirements-ready-to-paste)
+8. [Design detail](#part-8--design-detail)
+9. [What to write in each phase](#part-9--what-to-write-in-each-phase)
+10. [Test cases](#part-10--test-cases)
+11. [Glossary](#part-11--glossary)
+
+---
+
+# Part 1 — What PetPal is
+
+## The one-paragraph version (safe to reuse in any report)
+
+PetPal is a responsive web application that brings the day-to-day care of a
+companion animal into one place. It gives pet owners a feeding plan calculated
+from veterinary energy formulas, an instant food-and-plant safety checker, a
+directory of real veterinary practices near them, a guided wellness assessment,
+a structured four-week plan for a new puppy or kitten, a library of care guides,
+and a moderated community wall. It supports dogs, cats, rabbits, birds, reptiles
+and small pets.
+
+## The problem it solves
+
+| Problem | How PetPal addresses it |
+|---|---|
+| Owners guess portion sizes, and over half of pets are overweight | Nutrition Planner calculates exact daily calories and grams from body weight, species, life stage, activity and body condition |
+| Owners accidentally feed toxic food | Food Safety Checker with 88 verified entries, giving the clinical reason and the action to take |
+| Finding a vet in an emergency is slow | Find a Vet maps real practices near the user's location |
+| Health information is scattered and unreliable | 20 care guides written in one consistent voice |
+| Vaccinations and weight changes go unnoticed | Each pet has its own page with a weight log (and trend chart) and dated reminders for vaccines, vet visits, medication and more |
+| New owners don't know where to start | A four-week care plan, with separate puppy and kitten tracks |
+| Owners feel alone | An anonymous community wall |
+| Owners can't get a professional opinion on a non-urgent worry without paying for a consultation | **Ask a Vet** — post a question, a verified vet answers, and the whole archive is public |
+
+## Who uses it (your actors)
+
+| Actor | What they can do |
+|---|---|
+| **Visitor** (not signed in) | Browse the home page, use the Nutrition Planner, Food Safety Checker, Find a Vet, Wellness Check, Care Plan, Care Guides, read the community wall and read Ask a Vet |
+| **Pet Owner** (signed in) | Everything a visitor can do, plus create, edit and delete pet profiles, log weigh-ins and reminders for each pet, see a personal dashboard, change their password or delete their account, post to the wall, and **ask a question on Ask a Vet** |
+| **Veterinary Professional** (signed in) | Everything an owner can do, plus — **once verified by an administrator** — answering questions on Ask a Vet under a verified badge |
+| **Administrator** | Everything an owner can do, plus the admin console and verifying veterinary professionals |
+| **Supabase** (external system) | Stores accounts and data, enforces access rules |
+| **OpenStreetMap** (external system) | Supplies real veterinary practice locations |
+
+> **Note for your report.** The tools are deliberately usable without an account.
+> This is a design decision worth defending: in an emergency, nobody stops to
+> register before checking whether chocolate is poisonous.
+
+## The two user types
+
+PetPal is a **two-sided** system. Both sides sign up through the same form and
+choose their account type.
+
+| | Pet Owner | Veterinary Professional |
+|---|---|---|
+| Chooses at sign-up | "Pet owner" | "Veterinary pro" |
+| Extra details captured | — | Full name, practice, registration number |
+| `profiles.role` | `user` | `vet` |
+| Extra table | — | `vet_profiles` |
+| Trusted immediately? | n/a | **No.** Created `verified = false` |
+| Can use every owner tool | Yes | Yes |
+| Can ask a question | Yes | Yes |
+| Can **answer** a question | No | Only once verified |
+
+**Why verification is manual, and why it matters for your report.** A
+self-declared "vet" badge on clinical advice is dangerous — someone could tell
+an owner that a toxic food is safe and carry a professional badge while doing
+it. So a new professional account is created unverified; an administrator checks
+the registration number against the professional register before setting
+`verified = true`.
+
+Crucially, that rule is enforced by a **row-level security policy in the
+database**, not by hiding a button in the interface:
+
+```sql
+create policy "verified vets answer" on answers for insert
+  with check (
+    auth.uid() = vet_id
+    and exists (
+      select 1 from vet_profiles v
+      where v.id = auth.uid() and v.verified = true
+    )
+  );
+```
+
+If it were enforced only in the front end, anyone could post an answer carrying
+a vet badge by calling the API directly. This is a good example to cite in your
+Security section.
+
+---
+
+# Part 2 — The technology, explained simply
+
+## The stack
+
+| Layer | What we used | What it does, in plain terms |
+|---|---|---|
+| **Language** | TypeScript | JavaScript with type checking. Catches mistakes before the code runs. |
+| **Framework** | Next.js 16 | Organises the pages, decides what is built on the server vs the browser. |
+| **UI library** | React 19 | Builds the interface out of reusable pieces called components. |
+| **Styling** | Tailwind CSS 4 | Styling written as short class names directly on elements. |
+| **Animation** | Framer Motion | The fades and slides as things appear. |
+| **3D** | Three.js + React Three Fiber | The 3D feeding bowl on the home page. |
+| **Smooth scrolling** | Lenis | Smoothed mouse-wheel scrolling on the home page only. |
+| **Charts** | Recharts | The weight graph and the macro radar chart. |
+| **Maps** | Leaflet + React-Leaflet | The map on Find a Vet. |
+| **Database** | Supabase (PostgreSQL) | Stores accounts, pets and posts. |
+| **Hosting** | Vercel | Puts the site on the internet. |
+| **Version control** | Git + GitHub | History of every change. |
+
+## Two words you will be asked about
+
+**Client Component** — code that runs in the visitor's browser. Anything
+interactive (a button, a slider, the 3D scene) must be one. Marked with
+`'use client'` at the top of the file.
+
+**Server Component** — code that runs on the server before the page is sent.
+Faster and can safely hold secrets. The default in Next.js 16.
+
+Most of PetPal's pages are Client Components because almost every screen is
+interactive.
+
+## Why these choices (for your feasibility section)
+
+- **TypeScript** — catches a whole class of bugs at compile time rather than in
+  front of a marker during a demo.
+- **Next.js** — one framework for front end and back end, so there is one
+  codebase and one deployment.
+- **Supabase over building our own back end** — gives authentication, a real
+  relational database and row-level security out of the box. Building equivalent
+  auth from scratch would have consumed the whole project timeline.
+- **PostgreSQL** — genuinely relational, which supports the entity-relationship
+  modelling and normalisation this module requires.
+- **Everything is free at our scale** — no licence costs, which is the core of
+  the economic feasibility argument.
+
+---
+
+# Part 3 — Every folder and file
+
+```
+demo-master/
+├── app/                      ← every page of the website
+│   ├── page.tsx                 the public home page ("The Bowl")
+│   ├── layout.tsx               the shell wrapped around every page
+│   ├── globals.css              all colours, fonts and shared styles
+│   ├── setup/                   connection diagnostics page
+│   ├── auth/                    sign in, sign up, forgot password
+│   └── (dashboard)/             every tool and logged-in screen
+├── components/               ← reusable interface pieces
+│   ├── landing/                 the home page: its sections and the 3D bowl scene
+│   ├── public/                  the public navbar and the logo
+│   ├── layout/                  the sidebar and the chrome switcher
+│   └── ui/                      generic buttons, inputs, cards, tables
+├── lib/                      ← the logic, with no interface attached
+├── supabase/
+│   └── schema.sql               the whole database in one file
+├── public/                   ← images served as-is
+├── SETUP.md                  ← how to deploy it
+├── PROJECT-GUIDE.md          ← this file
+└── package.json              ← the list of libraries used
+```
+
+## `app/` — the pages
+
+Next.js uses **folder names as web addresses**. A folder containing `page.tsx`
+becomes a page. `app/(dashboard)/nutrition/page.tsx` is the page at `/nutrition`.
+
+Brackets like `(dashboard)` group files **without** adding to the address — they
+exist so every tool page can share one layout.
+
+| File | Address | What it is |
+|---|---|---|
+| `app/page.tsx` | `/` | Public home page |
+| `app/setup/page.tsx` | `/setup` | Connection diagnostics |
+| `app/auth/login/page.tsx` | `/auth/login` | Sign in |
+| `app/auth/signup/page.tsx` | `/auth/signup` | Create account |
+| `app/auth/forgot-password/page.tsx` | `/auth/forgot-password` | Password reset |
+| `app/auth/callback/route.ts` | `/auth/callback` | Handles the emailed link |
+| `app/(dashboard)/dashboard/page.tsx` | `/dashboard` | Owner's home screen |
+| `app/(dashboard)/pets/page.tsx` | `/pets` | List of the owner's pets |
+| `app/(dashboard)/pets/[id]/page.tsx` | `/pets/<id>` | One pet: edit, delete, weight log, reminders |
+| `app/(dashboard)/add-pet/page.tsx` | `/add-pet` | Add a pet form |
+| `app/(dashboard)/nutrition/page.tsx` | `/nutrition` | Feeding planner |
+| `app/(dashboard)/food-safety/page.tsx` | `/food-safety` | Safety checker |
+| `app/(dashboard)/vet-finder/page.tsx` | `/vet-finder` | Map of vets |
+| `app/(dashboard)/wellness/page.tsx` | `/wellness` | Health questionnaire |
+| `app/(dashboard)/care-plan/page.tsx` | `/care-plan` | Four-week plan |
+| `app/(dashboard)/resources/page.tsx` | `/resources` | 20 care guides |
+| `app/(dashboard)/wall/page.tsx` | `/wall` | Community wall |
+| `app/(dashboard)/ask/page.tsx` | `/ask` | Ask a Vet |
+| `app/(dashboard)/vet/page.tsx` | `/vet` | Vet Console (professionals only) |
+| `app/(dashboard)/settings/page.tsx` | `/settings` | Account settings |
+| `app/(dashboard)/admin/page.tsx` | `/admin` | Admin console |
+
+## `lib/` — the logic
+
+**This is the most important folder for your documentation.** It holds the rules
+of the system separated from how they are displayed. Each file is one
+responsibility.
+
+| File | Lines | What it does |
+|---|---|---|
+| `nutrition.ts` | 216 | The feeding calculation. Species data, the RER/MER formulas, input clamping. **Every calorie number in the app comes from here.** |
+| `food-safety.ts` | 771 | The 88-entry food and plant database, and the matching algorithm that decides which entry a search means. |
+| `guides.ts` | 219 | The 20 care guides. Screens count them from this list rather than typing a number. |
+| `wellness.ts` | 73 | The wellness questions and the scoring rules, including the red-flag answers. |
+| `health.ts` | 112 | Pet-record helpers: plausible maximum weight per species (`MAX_KG`), pet and weight validation, due-date wording ("in 3 days", "overdue"), and the link from a pet to a pre-filled nutrition plan. |
+| `vets.ts` | 267 | Fetches real veterinary practices from OpenStreetMap; distance calculation; offline fallback. |
+| `storage.ts` | 137 | Safe reading/writing of browser storage, with migration of old keys. |
+| `types.ts` | 172 | The shape of a Pet, a Profile, a WallPost, a reminder and a weigh-in — used across the app. |
+| `use-client-value.ts` | 67 | Lets a component read browser-only values without a double render. |
+| `utils.ts` | 49 | Date formatting and class-name merging. |
+| `supabase/client.ts` | 34 | Creates the database connection in the browser. |
+| `supabase/server.ts` | 22 | Creates it on the server. |
+| `supabase/errors.ts` | 164 | Turns cryptic errors into readable ones; the health probe used by `/setup`. |
+| `auth.ts` | 30 | Checks whether a user is an administrator. Trusts only `app_metadata.role` or `profiles.role` — never `user_metadata`, which any user can edit. |
+
+## `components/` — the interface pieces
+
+| File | What it draws |
+|---|---|
+| `landing/Landing.tsx` | Runs the home page in the browser: smooth scroll, scroll → 3D scene, quality level, the chapter gauge |
+| `landing/Portions.tsx` | The "Portion Facts" panel — the real feeding calculation |
+| `landing/FoodCheck.tsx` | The mini food check that drops food toward the bowl |
+| `landing/JoinCard.tsx` | The closing sign-up card; the typed name is engraved on the 3D tag and saved nowhere |
+| `landing/scene/*` | The 3D scene: canvas and lighting, bowl, kibble, food models, ID tag, camera |
+| `public/Navbar.tsx` | The top navigation for signed-out pages |
+| `layout/PageHeader.tsx` | The header on every tool page, with its gram-scale ruler |
+| `public/Logo.tsx` | The paw logo |
+| `layout/DashboardSidebar.tsx` | The left sidebar when signed in |
+| `layout/AppChrome.tsx` | Decides whether to show the navbar or the sidebar |
+| `VetMap.tsx` | The Leaflet map |
+| `SiteEffects.tsx` | Scroll progress bar and cursor glow |
+| `ui/*` | Generic building blocks (button, input, card, table, dialog…) |
+
+## Root configuration files
+
+| File | Purpose |
+|---|---|
+| `package.json` | Every library the project depends on |
+| `next.config.ts` | Image settings and the `/vets → /vet-finder` redirect |
+| `tsconfig.json` | TypeScript settings |
+| `eslint.config.mjs` | Code-quality rules |
+| `proxy.ts` | Runs before every request; redirects signed-out users away from private pages |
+| `.gitignore` | Files never uploaded (including `.env.local`, which holds your keys) |
+
+---
+
+# Part 4 — Every screen
+
+For each screen: what the user sees, what they can do, and where the data comes
+from. **"Local only" means it does not touch the database.**
+
+### Home page — `/` ("The Bowl")
+- **The idea:** everything in caring for a pet passes through one feeding bowl.
+  A 3D bowl sits behind the page and changes as you scroll through seven
+  chapters: the bowl (hero), Portions, Safe or not, Records, Vets, Together,
+  Join. See "The 3D bowl" in Part 8.
+- **Shows:** headline and calls to action; a **Portion Facts** panel styled like
+  a pet-food label that calculates a real plan, while the bowl fills with one
+  meal; a mini food check that drops the food toward the bowl; Records, Vets and
+  Together sections on warm "paper" with photographs, tool cards and an FAQ; a
+  closing sign-up card whose pet name is engraved live on a 3D ID tag; footer.
+  There are **no testimonials** — the earlier version had three invented quotes
+  with stock photos, plus "Loved by 120,000+ pet parents", "4.9 avg rating" and
+  "18k+ pets tracked", none of which had been measured. All removed, and none
+  came back in the redesign.
+- **Statistics shown, and where each comes from:** the hero shows foods and
+  plants checked (counted from the food database, currently 88), species in the
+  planner (6) and care guides (20) — all counted from the code, so they cannot
+  drift from the real screens. The Portions chapter cites one survey: more than
+  half of dogs in a US vet survey were overweight (APOP, 2018).
+- **User can:** try the feeding calculator and the food check without an
+  account, type a pet's name to see it engraved, navigate anywhere.
+- **Data:** local only. The Portion Facts panel uses `lib/nutrition.ts`, the
+  food check uses `lib/food-safety.ts`, and the name typed in the sign-up card is
+  not stored or sent anywhere.
+- **Look:** its own type — Newsreader for headlines, Archivo Black for the
+  label panels, Geist Mono for read-outs — kept separate from the signed-in
+  app's fonts. Eight licensed photos (Unsplash and Pexels, credited in
+  `docs/image-credits.md`), seven of them on the page.
+
+### Sign up — `/auth/signup`
+- **Shows:** name, email, password fields.
+- **User can:** create an account.
+- **Data:** writes to Supabase `auth.users`; a trigger creates the `profiles` row.
+- **Validation:** password at least 8 characters; email format; duplicate email
+  rejected by Supabase.
+- **After submit:** if Supabase is set to confirm emails, the user is told to
+  check their inbox, and the link returns through `/auth/callback`. If
+  confirmation is switched off, Supabase returns a session straight away and the
+  user is signed in directly.
+
+### Sign in — `/auth/login`
+- **Shows:** email and password.
+- **Data:** Supabase authentication. On success a session cookie is set.
+- **Errors:** distinguishes a wrong password from the database being unreachable,
+  and links to `/setup` when it is a configuration problem.
+
+### Forgot password — `/auth/forgot-password`
+- **Data:** Supabase sends a recovery email. Always shows the same confirmation
+  whether or not the address exists, so the page cannot be used to discover who
+  has an account.
+- **The emailed link** goes through `/auth/callback`, signs the user in, and
+  lands on **Settings → Password & Privacy**, where they set the new password.
+  (It used to lead to a page with no way to set one.)
+
+### Dashboard — `/dashboard`
+- **Shows:** only the owner's real data — their pets, their upcoming and overdue
+  reminders, and a weight-trend chart drawn from real weigh-ins (a pet needs at
+  least two weigh-ins before it gets a chart). With no pets, it says so and
+  offers "Add a pet".
+- **Why this is worth saying:** it used to show two example pets ("Biscuit" and
+  "Luna"), a hard-coded weight chart for Biscuit and invented reminders — to
+  every user. All of that is gone.
+- **Data:** reads `pets`, `pet_reminders` and `pet_weights` for the signed-in
+  owner.
+- **Protected:** signed-out visitors are redirected to sign in. Administrators
+  are no longer forced off to `/admin`; they see a link to it instead.
+
+### My Pets — `/pets`, Add a Pet — `/add-pet`
+- **Shows / does:** lists the owner's real pets (each opens its own page); the
+  form captures name, species, breed, age, weight and sex ("Male", "Female" or
+  "Not sure").
+- **Data:** reads `pets` (and `pet_reminders`, to show what is due); Add a Pet
+  writes `pets` and logs the starting weight as the first entry in `pet_weights`,
+  then opens the new pet's page.
+- **Validation:** name required, at most 40 characters; weight optional, but if
+  given it must be above zero and plausible for the species (`MAX_KG` in
+  `lib/health.ts` — e.g. 15 kg for a cat, 120 kg for a dog), which catches typos
+  like "45" for a 4.5 kg cat. A failed save shows the real error; it no longer
+  announces "has joined your family!" when nothing was saved.
+
+### Pet page — `/pets/<id>` (new)
+- **Shows / does:**
+  - **Details** — edit name, species, breed, age and sex; **delete** the pet
+    (asks for confirmation first).
+  - **Weight log** — add a weigh-in (kg and date; it cannot be dated in the
+    future), remove one, and see a trend chart.
+  - **Reminders** — add one with a type (vaccine, vet visit, medication,
+    deworming, grooming, other), a title and a due date from today onwards; tick
+    it done; delete it. Overdue ones are marked.
+  - **"Nutrition plan for <pet>"** — opens the planner pre-filled with the pet's
+    species and weight (`/nutrition?species=…&weight=…`). Fish and "other" get no
+    link, because the planner has no formula for them.
+- **Data:** reads and writes `pets`, `pet_weights` and `pet_reminders`.
+- **Rule worth mentioning:** the pet's current weight (`pets.weight`) is kept
+  equal to its latest weigh-in by a database trigger (`sync_pet_weight`), so no
+  screen can update one and forget the other.
+- **Limitation:** reminders are shown inside the app only — nothing sends an
+  email or push notification.
+
+### Nutrition Planner — `/nutrition`
+- **Shows:** species picker, weight slider, life stage, activity level, body
+  condition. Outputs daily calories, food in grams, meals per day, water target
+  and a macro chart.
+- **Data:** local only — pure calculation, no database.
+- **Logic:** `lib/nutrition.ts`. See [Part 8](#the-feeding-calculation) for the
+  formula and pseudocode.
+- **Details:** the weight slider moves in 0.1 kg steps for every species whose
+  range tops out at 15 kg or less (0.5 kg for dogs, whose range goes to 90 kg),
+  so the value shown is exactly the value calculated — a 0.25 kg step used to
+  display "4.3 kg" while calculating for 4.25. Switching species resets the
+  slider to that species' typical weight. It can be opened pre-filled from a
+  pet's page.
+
+### Food Safety Checker — `/food-safety`
+- **Shows:** a search box, quick-pick chips, and a verdict card (Safe / In
+  moderation / Do not feed) with the clinical reason, which animals it affects,
+  and what to do.
+- **Data:** local only — 88 entries in `lib/food-safety.ts`. (There were 89:
+  "peanut butter" was rated safe while "xylitol-free peanut butter" was rated
+  caution, which contradicted itself. They are now one caution entry covering
+  nut butters, because some contain xylitol. The alias "weed" was also removed
+  from cannabis, so "my dog ate a weed" no longer reports cannabis.)
+- **Important behaviour:** an unrecognised item is reported as *unverified* with
+  suggestions, never guessed. See [Part 8](#the-food-safety-matching-algorithm).
+
+### Find a Vet — `/vet-finder`
+- **Shows:** a map and a distance-sorted list of real practices.
+- **Data:** browser geolocation (with permission) → OpenStreetMap Overpass API.
+- **Honest by design:** no star ratings, because OpenStreetMap does not hold
+  them. A "Call" button only appears when a verified phone number exists.
+- **Fallbacks:** location denied → searches around a default city; the directory
+  unreachable → an error with a retry, never invented clinics.
+
+### Wellness Check — `/wellness`
+- **Shows:** eight questions, one at a time, then a 0–100 score, a verdict, and
+  a "Worth looking at" list of the areas that scored low.
+- **Data:** local only. The questions and rules live in `lib/wellness.ts`.
+- **Scoring:** each answer is 0–3; score = (total ÷ maximum) × 100.
+- **Red flags override the score.** Four answers — *Lethargic*, *Barely eating*,
+  *Ribs, spine or hips stick out* and *Clearly abnormal* toileting — give "See a
+  vet" whatever the total. Before, a pet that was barely eating could still score
+  "Thriving" because coat and exercise outvoted it. The body-shape question also
+  gained an underweight answer; previously an underweight pet had no honest
+  option and was scored as ideal.
+
+### Care Plan — `/care-plan`
+- **Shows:** a four-week checklist with a puppy track and a kitten track.
+- **Data:** progress saved in browser storage (`petpal_careplan`).
+
+### Care Guides — `/resources`
+- **Shows:** 20 guides, filterable by category, opening in a reader. (There were
+  21, but "Parasite Prevention" duplicated "Fleas, Ticks and Worms"; they were
+  merged.)
+- **Data:** local only — `lib/guides.ts`. Every screen that quotes the number of
+  guides counts this list.
+
+### Community Wall — `/wall`
+- **Shows:** anonymous posts with a mood tag and a heart count.
+- **User can:** post (10–280 characters) and heart a post once per browser.
+- **Data:** reads and writes `confessions`; hearts go through the
+  `increment_hearts` database function.
+- **When the database is unreachable:** example posts are shown, clearly as
+  examples, and posting and hearts are switched off. A live wall with no posts
+  shows an empty state rather than examples.
+
+### Ask a Vet — `/ask`
+- **Shows:** a question board. Each question expands to show its answers, with a
+  verified-vet badge, the vet's name and practice.
+- **User can:** read without an account; ask a question when signed in; answer
+  only as a **verified** veterinary professional.
+- **Data:** reads and writes `questions` and `answers`, then fetches the
+  answering vets' names from `vet_profiles` in a second query and joins them in
+  the browser. (It used to ask the database to embed `vet_profiles` through a
+  relationship that does not exist; the error was ignored, so answers vanished
+  on reload.) It also shows how many verified vets are currently "taking
+  questions" — the availability switch in the Vet Console.
+- **When the database is unreachable:** example questions are shown and posting
+  is disabled. The example answers carry no invented doctors' names, no real
+  practice names and no "Verified vet" badge.
+- **Safety:** a prominent notice states this is not an emergency service and
+  links to the vet finder, because a Q&A board must never become the thing
+  someone waits on during a crisis.
+
+### Settings — `/settings`
+- **Shows:** four tabs — Profile, Password & Privacy, Appearance, Account.
+- **User can:** change their display name (saved to both their login details
+  and `profiles`); **change their password**; sign out other sessions; set
+  theme, accent colour, reduce motion and high contrast; and **delete their
+  account** — they must type `DELETE` to confirm, and it really deletes (see
+  `delete_my_account` in Part 5).
+- **What was removed, and why:** an invented "Member since June 2026 · 2 pets"
+  (now the real date and count), "Last changed 3 months ago", a false
+  "zero-knowledge encryption" claim, a bio field that was never saved, and
+  switches that did nothing (two-factor authentication, notifications, public
+  profile, data sharing, anonymous mode).
+- **Data:** display name and password → Supabase; appearance preferences →
+  browser storage.
+
+### Admin console — `/admin`
+- **Shows:** four tabs — Overview, Community, Vets, Accounts.
+  - **Overview:** four counts (registered accounts, community posts, verified
+    vets, awaiting verification) and two charts — new accounts in the last 14
+    days (from `profiles.created_at`) and Ask a Vet questions by species,
+    answered versus waiting.
+  - **Community:** remove posts. It only says "removed" once the database
+    confirms it. (There used to be no delete policy, so removal silently failed
+    while the screen reported success.)
+  - **Vets:** every professional with practice, registration number and status;
+    **Verify** and **Revoke** write to the database. A registration number used
+    by more than one account is flagged beside both.
+  - **Accounts:** name, email, role and join date.
+- **Access:** only for an administrator (`profiles.role = 'admin'`, or
+  `app_metadata.role` set on the server).
+- **All live data.** The earlier "demonstration data" banner and its invented
+  charts (sign-ups of up to 740 a day, 6,200 dogs) have been removed.
+
+### Setup check — `/setup`
+- **Shows:** a pass/fail list for every connection requirement.
+- **Purpose:** turns "Failed to fetch" into a named, fixable cause.
+
+---
+
+# Part 5 — The database
+
+Nine tables: `profiles`, `pets`, `pet_reminders`, `pet_weights`,
+`confessions`, `vet_profiles`, `vet_replies`, `questions` and `answers`.
+Everything is in `supabase/schema.sql`, which also defines seven functions
+(`is_admin`, `handle_new_user`, `sync_pet_weight`, `increment_hearts`,
+`guard_vet_profile`, `bump_answer_count`, `delete_my_account`), four triggers and
+32 row-level security policies.
+
+## Table: `profiles`
+
+One row per registered user.
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, references `auth.users` | Same id as the login |
+| `email` | text | | Their email |
+| `display_name` | text | | Shown in the app |
+| `avatar_url` | text | | Profile picture |
+| `role` | text | Default `'user'`, must be `'user'`, `'vet'` or `'admin'`. **A user cannot change it** — they may update only `display_name` and `avatar_url` | Permission level |
+| `created_at` | timestamptz | Defaults to now | When they joined |
+
+## Table: `pets`
+
+One row per animal.
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, auto-generated | Unique id |
+| `owner_id` | uuid | References `auth.users`, cascade delete | Who owns it |
+| `name` | text | **Required**, 1–40 characters once spaces are trimmed | Pet's name |
+| `species` | text | Must be one of dog, cat, bird, rabbit, fish, reptile, small, other (the database also accepts `invert`, which the app does not offer) | Kind of animal |
+| `breed` | text | Optional | Breed |
+| `age` | text | Optional | Free text ("3 years") |
+| `weight` | numeric | Greater than 0 and at most 200 if given. Kept equal to the latest `pet_weights` entry by a trigger | Current weight, kilograms |
+| `sex` | text | male / female / unknown | Sex |
+| `photo_url` | text | Optional — no screen uploads a photo yet | Photo |
+| `created_at` | timestamptz | Defaults to now | When added |
+
+## Table: `pet_reminders` (new)
+
+Dated reminders for one pet — vaccines, vet visits, medication and so on.
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, auto-generated | Unique id |
+| `pet_id` | uuid | **Required**, references `pets`, cascade delete | Which pet |
+| `owner_id` | uuid | **Required**, references `auth.users`, cascade delete | Whose reminder |
+| `kind` | text | vaccine / vet_visit / medication / deworming / grooming / other; default other | Type |
+| `title` | text | **Required**, 2–80 characters | e.g. "Rabies booster" |
+| `due_on` | date | **Required** | When it is due |
+| `done` | boolean | Default false | Ticked off |
+| `created_at` | timestamptz | Defaults to now | When added |
+
+## Table: `pet_weights` (new)
+
+One row per weigh-in. This is what the weight charts are drawn from.
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, auto-generated | Unique id |
+| `pet_id` | uuid | **Required**, references `pets`, cascade delete | Which pet |
+| `owner_id` | uuid | **Required**, references `auth.users`, cascade delete | Whose record |
+| `weight_kg` | numeric | **Required**, greater than 0 and at most 200 | The weight |
+| `measured_on` | date | Defaults to today; cannot be in the future (the database allows one day's slack for time zones) | When it was weighed |
+| `created_at` | timestamptz | Defaults to now | When logged |
+
+> **Why `owner_id` is stored even though the pet already has an owner.** It lets
+> the security rule be a simple `auth.uid() = owner_id`. To stop someone hanging
+> a record off a pet that is not theirs, inserting also requires that the pet
+> belongs to the same owner.
+
+## Table: `confessions` (the community wall)
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, auto-generated | Unique id |
+| `text` | text | **Required**, 10–280 characters | The post |
+| `mood` | text | happy / proud / help / sad | Tag |
+| `hearts` | int | Default 0, cannot go negative; must be 0 on insert | Like count |
+| `created_at` | timestamptz | Defaults to now | When posted |
+
+> There is deliberately **no** `user_id`. The wall is anonymous by design —
+> nothing links a post to an account.
+
+## Table: `vet_profiles`
+
+The professional detail for a `vet` account. Separate from `profiles` so an
+owner's row stays lean.
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, references `auth.users` | Same id as the login |
+| `full_name` | text | **Required** | Name shown beside answers |
+| `practice_name` | text | Optional | Clinic or practice |
+| `city` / `country` | text | Optional | Where they practise |
+| `registration_no` | text | Optional. Only an admin may change it once set (trigger) | Checked during verification |
+| `specialities` | text | Optional | e.g. exotics, surgery |
+| `bio` | text | Optional | Short professional bio |
+| `verified` | boolean | Default **false**; must be false on insert; only an admin may change it (trigger) | Only true after an admin checks the register |
+| `accepting` | boolean | Default true | Whether they are currently taking questions |
+| `created_at` | timestamptz | Defaults to now | When registered |
+
+## Table: `vet_replies`
+
+A professional's private saved replies, used from the Vet Console.
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, auto-generated | Unique id |
+| `vet_id` | uuid | **Required**, references `auth.users`, cascade delete | Whose reply |
+| `title` | text | **Required**, 2–80 characters | Short label |
+| `body` | text | **Required**, 20–2000 characters | The text |
+| `uses` | int | Default 0, cannot go negative | How often used; orders the list |
+| `created_at` | timestamptz | Defaults to now | When saved |
+
+## Table: `questions`
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, auto-generated | Unique id |
+| `asker_id` | uuid | References `auth.users`, set null on delete | Who asked |
+| `title` | text | **Required**, 10–140 characters | One-line summary |
+| `body` | text | **Required**, 20–1200 characters | The detail |
+| `species` | text | One of the eight species | What kind of pet |
+| `resolved` | boolean | Default false; must be false on insert. The only column the author may update | Author marks it done |
+| `answer_count` | int | Default 0, cannot go negative; must be 0 on insert | Kept in step by a trigger |
+| `created_at` | timestamptz | Defaults to now | When asked |
+
+## Table: `answers`
+
+| Column | Type | Rules | Meaning |
+|---|---|---|---|
+| `id` | uuid | Primary key, auto-generated | Unique id |
+| `question_id` | uuid | References `questions`, cascade delete | Which question |
+| `vet_id` | uuid | References `auth.users`, set null on delete | Which vet |
+| `body` | text | **Required**, 20–2000 characters. The only column the vet may update | The answer |
+| `created_at` | timestamptz | Defaults to now | When answered |
+
+> **Trigger worth mentioning in your Design phase.** `answer_count` on a
+> question is maintained by a database trigger (`bump_answer_count`) on insert
+> and delete, rather than being recalculated by the app. The count can therefore
+> never drift out of step with the rows it counts.
+
+> **Two more triggers worth mentioning.** `sync_pet_weight` runs after a
+> weigh-in is added or removed and sets `pets.weight` to the latest entry (if the
+> last entry is deleted, the pet keeps its previous weight). `guard_vet_profile`
+> runs before a vet profile is updated and refuses any change to `verified` or
+> `registration_no` unless the caller is an administrator.
+
+> **Deleting an account.** `delete_my_account()` is called from Settings. The
+> browser cannot remove a login itself, so this `SECURITY DEFINER` function
+> deletes the caller's own `auth.users` row — nobody else's. Everything keyed to
+> the user cascades: profile, pets (and with them their reminders and
+> weigh-ins), vet profile and saved replies. Questions and answers stay in the
+> public archive with the author removed (`on delete set null`).
+
+## Relationships (your ER diagram)
+
+```
+   auth.users  (managed by Supabase)
+        │ 1
+        ├───────── 1 ─────  profiles        (one-to-one extension, same id)
+        │
+        ├───────── 0..1 ──  vet_profiles    (only for a 'vet' account)
+        │
+        ├───────── 0..* ──  vet_replies     (a vet's saved replies)
+        │
+        ├───────── 0..* ──  pets            (an owner owns many pets)
+        │
+        ├───────── 0..* ──  questions       (asker_id)
+        │
+        └───────── 0..* ──  answers         (vet_id)
+
+   pets       ── 1 ────── 0..* ──  pet_reminders  (a pet has many reminders)
+   pets       ── 1 ────── 0..* ──  pet_weights    (a pet has many weigh-ins)
+   questions  ── 1 ────── 0..* ──  answers        (a question has many answers)
+
+   confessions  ── standalone, no relationship (anonymous by design)
+```
+
+(`pet_reminders` and `pet_weights` also carry `owner_id → auth.users`; see the
+note under `pet_weights` for why.)
+
+**In words, for your report:**
+- One user **has one** profile (one-to-one).
+- A user **may have** one vet profile — only if they registered as a
+  professional (one-to-zero-or-one).
+- One user **owns many** pets (one-to-many).
+- One pet **has many** reminders and **many** weigh-ins (one-to-many).
+- One user **asks many** questions; one vet **writes many** answers and saves
+  many replies.
+- One question **has many** answers (one-to-many).
+- `confessions` has no relationship to any other table.
+
+**Cardinality notation:** `users (1) ──── (0..*) pets`
+
+## Normalisation (they will ask)
+
+The schema is in **Third Normal Form**:
+
+| Form | Why it holds |
+|---|---|
+| **1NF** | Every column holds a single value. No repeating groups or comma-separated lists. |
+| **2NF** | In 1NF, and every non-key column depends on the whole primary key. Every table uses a single-column key, so partial dependency is impossible. |
+| **3NF** | In 2NF, and no non-key column depends on another non-key column. For example `pets.breed` depends only on `pets.id`, not on `pets.species`. |
+
+**Deliberate exceptions — say so rather than hide them:**
+- `questions.answer_count` can be counted from `answers`; it is stored for speed
+  and kept correct by a trigger.
+- `pets.weight` duplicates the latest `pet_weights` entry; it is stored so the
+  pet list does not need the whole log, and kept correct by a trigger.
+- `pet_reminders.owner_id` and `pet_weights.owner_id` could be found through
+  the pet; they are stored so the security rule is a direct comparison, and the
+  insert rule checks they match the pet's real owner.
+
+## Data integrity and constraints
+
+| Type | Where it is used | Example |
+|---|---|---|
+| **Primary key** | Every table | `pets.id` |
+| **Foreign key** | `profiles.id`, `pets.owner_id`, `pet_reminders.pet_id`, `pet_weights.pet_id`, `answers.question_id`, and others | `pet_weights.pet_id → pets.id` |
+| **Referential integrity** | Cascade delete | Deleting a user deletes their pets; deleting a pet deletes its reminders and weigh-ins |
+| **Check constraint** | species, sex, role, mood, hearts, reminder kind, text lengths, pet name 1–40, weights > 0 and ≤ 200, weigh-in not in the future | `weight_kg > 0 and weight_kg <= 200` |
+| **Not null** | `pets.name`, `confessions.text`, `pet_reminders.due_on`, `pet_weights.weight_kg` | A pet must have a name |
+| **Default** | `created_at`, `hearts`, `role`, `done`, `measured_on` | `hearts` starts at 0 |
+| **Unique** | Primary keys | No two pets share an id |
+
+## Security: Row-Level Security (RLS)
+
+This is worth a whole section in your Design phase.
+
+RLS means **the database itself** decides which rows a user may see — not the
+app. Even if the front end had a bug, a user still could not read another user's
+pets.
+
+| Table | Rule |
+|---|---|
+| `profiles` | Read/update only where `auth.uid() = id`; an admin may read all. Users may update **only** `display_name` and `avatar_url` — never `role` |
+| `pets` | Read/insert/update/delete only where `auth.uid() = owner_id` |
+| `pet_reminders` | Owner only, for read/insert/update/delete; insert and update also require the pet to belong to that owner |
+| `pet_weights` | Owner only, for read/insert/delete; insert also requires the pet to belong to that owner |
+| `confessions` | Anyone may read and insert, but a new post must start with `hearts = 0`; **only an admin may delete** |
+| `vet_profiles` | Anyone may read (details appear beside answers); the vet may insert their own row **only with `verified = false`**, and update their own row; an admin may update any row. A trigger stops anyone but an admin changing `verified` or `registration_no` |
+| `vet_replies` | The author only, for all four operations |
+| `questions` | Anyone may read; a signed-in user may insert as themselves, with `answer_count = 0` and `resolved = false`; the author may update **only** `resolved` |
+| `answers` | Anyone may read; **only a verified vet may insert**, checked against `vet_profiles.verified`; the vet may update **only** `body` |
+
+Hearts use a `SECURITY DEFINER` function instead of an update policy. Two
+reasons, both worth stating: an update policy would also let anyone rewrite the
+post text, and `hearts = hearts + 1` inside the database is atomic, so two
+simultaneous likes cannot overwrite each other.
+
+### Security holes found and closed — good material for your report
+
+An audit of the earlier schema found that several rules looked right but left a
+gap someone could use from the browser console:
+
+| What was possible before | What stops it now |
+|---|---|
+| Any signed-in user could run `update profiles set role = 'admin'` on their own row and become an administrator | Column-level grants: users may update only `display_name` and `avatar_url` |
+| Anyone could insert their own `vet_profiles` row with `verified = true` and answer under a verified badge | The insert policy requires `verified = false` |
+| A vet could set their own `verified`, or swap the registration number after being verified | The `guard_vet_profile` trigger — only an admin may change either |
+| A new question could claim answers it never had, or a question author could reword a question after a vet answered | Insert must have `answer_count = 0` and `resolved = false`; authors may update only `resolved` |
+| A vet could move an answer to a different question, leaving both counts wrong | Vets may update only `body` |
+| A post could be published claiming thousands of hearts | Insert requires `hearts = 0` |
+| The admin's "remove post" button silently did nothing — there was no delete policy | An admin-only delete policy |
+| The admin screen trusted `user_metadata.role`, which any user can set for themselves | `lib/auth.ts` reads only `app_metadata.role` or `profiles.role` |
+
+One thing is deliberately **not** blocked: two accounts registering the same
+vet registration number. A unique rule would make the second sign-up fail with
+Supabase's unhelpful "Database error saving new user". Instead the admin console
+flags the shared number so the administrator sees it before verifying.
+
+**How this was checked.** The real `schema.sql` was run in PGlite (PostgreSQL
+compiled to WebAssembly) with an automated script of 49 checks — including the
+database attacks above (the last row is app code, not tested there), which
+succeeded against the old schema — and all 49 pass. The script is
+`tests/schema.test.mjs`; `npm test` runs it.
+
+---
+
+# Part 6 — How data moves (for your DFDs)
+
+## Context diagram (Level 0)
+
+The whole system as one box.
+
+```
+   ┌──────────┐   pet details, searches, posts    ┌─────────────┐
+   │          │ ───────────────────────────────►  │             │
+   │ Pet      │                                    │             │
+   │ Owner    │ ◄─────────────────────────────── │   PetPal    │
+   └──────────┘   plans, verdicts, vet lists       │   System    │
+                                                    │             │
+   ┌──────────┐   moderation actions               │             │
+   │ Admin    │ ─────────────────────────────────► │             │
+   └──────────┘                                    └──────┬──────┘
+                                                           │
+                    account + pet data  ┌──────────────────┴────┐
+                    ◄──────────────────►│  Supabase (database)  │
+                                         └───────────────────────┘
+                    practice locations  ┌───────────────────────┐
+                    ◄──────────────────►│  OpenStreetMap        │
+                                         └───────────────────────┘
+```
+
+## Level 1 — the main processes
+
+Draw these as numbered circles.
+
+| # | Process | Input | Output | Data store used |
+|---|---|---|---|---|
+| 1.0 | Manage Account | email, password | session | D1 profiles |
+| 2.0 | Manage Pets | pet details, weigh-ins, reminders | saved profile, weight trend, due and overdue reminders | D2 pets, D8 pet_reminders, D9 pet_weights |
+| 3.0 | Calculate Feeding Plan | species, weight, stage, activity, condition | calories, grams, meals | none |
+| 4.0 | Check Food Safety | search term | verdict + action | none (in-app database) |
+| 5.0 | Find Vets | location | ranked practice list | external: OpenStreetMap |
+| 6.0 | Assess Wellness | 8 answers | score + advice | none |
+| 7.0 | Track Care Plan | ticked steps | progress % | browser storage |
+| 8.0 | Community Wall | post text, mood | published post | D3 confessions |
+| 9.0 | Administer | moderation actions, vet verification | updated content, verified vets | D1, D3, D4 |
+| 10.0 | Ask a Vet | question text, species | published question | D5 questions |
+| 11.0 | Answer a Question | answer text (verified vets only) | published answer | D5, D6 answers |
+
+**Data stores:**
+- **D1** — profiles
+- **D2** — pets
+- **D3** — confessions
+- **D4** — vet_profiles
+- **D5** — questions
+- **D6** — answers
+- **D7** — browser local storage (care plan progress, settings, hearts given)
+- **D8** — pet_reminders
+- **D9** — pet_weights
+
+## Level 2 example — Process 3.0, Calculate Feeding Plan
+
+```
+ species, weight,          ┌──────────────┐
+ life stage, activity ────►│ 3.1 Validate │──► clamped, safe values
+ body condition            │  and clamp   │
+                           └──────┬───────┘
+                                  ▼
+                           ┌──────────────┐
+                           │ 3.2 Calculate│  RER = 70 × weight^0.75
+                           │     RER      │
+                           └──────┬───────┘
+                                  ▼
+                           ┌──────────────┐
+                           │ 3.3 Apply    │  × activity × life stage
+                           │  multipliers │  × species × condition
+                           └──────┬───────┘
+                                  ▼
+                           ┌──────────────┐
+                           │ 3.4 Convert  │──► grams, meals, water, cups
+                           │  to portions │
+                           └──────────────┘
+```
+
+## Sequence: a user signs in
+
+1. User types email and password, presses Sign In.
+2. Browser sends them to Supabase Auth.
+3. Supabase checks the credentials.
+4. If correct, Supabase returns a session and the browser stores a cookie.
+5. The browser navigates to `/dashboard`.
+6. `proxy.ts` checks the cookie before the page loads.
+7. The dashboard requests that user's pets.
+8. Row-Level Security filters the result to that user's rows only.
+9. The dashboard renders.
+
+## Sequence: checking a food
+
+1. User types "chicken".
+2. The text is normalised (lowercased, punctuation stripped).
+3. Every alias of all 88 entries is scored against it.
+4. The highest-scoring (most specific) match wins.
+5. The verdict, reason and action are displayed.
+6. If nothing matches, an *unverified* message with suggestions is shown.
+
+*No network request happens — the whole database ships with the app, so it works
+offline and instantly.*
+
+---
+
+# Part 7 — Requirements, ready to paste
+
+## Functional requirements
+
+Numbered so you can reference them in test cases.
+
+| ID | Requirement |
+|---|---|
+| FR-01 | The system shall allow a visitor to create an account with an email address and a password of at least 8 characters. |
+| FR-02 | The system shall allow a registered user to sign in and sign out. |
+| FR-03 | The system shall allow a user to request a password-reset email. |
+| FR-04 | The system shall prevent unauthenticated users from accessing the dashboard, pet management, settings and admin pages. |
+| FR-05 | The system shall allow a signed-in user to create a pet profile recording name, species, breed, age, weight and sex. |
+| FR-06 | The system shall display all pets belonging to the signed-in user, and only those pets. |
+| FR-07 | The system shall calculate a daily energy requirement from species, body weight, life stage, activity level and body condition. |
+| FR-08 | The system shall convert that energy requirement into food quantity in grams, meals per day and a daily water target. |
+| FR-09 | The system shall support at least six species in the feeding calculation. |
+| FR-10 | The system shall classify a searched food, plant or household item as safe, safe in moderation, or toxic. |
+| FR-11 | The system shall display the clinical reason, the affected species and the recommended action for each safety result. |
+| FR-12 | The system shall report an unrecognised item as unverified and shall not guess a verdict. |
+| FR-13 | The system shall retrieve veterinary practices near the user's location from an external directory and rank them by distance. |
+| FR-14 | The system shall display a practice's telephone number only where one is verified in the source data. |
+| FR-15 | The system shall present an eight-question wellness assessment and produce a score from 0 to 100 with advice. |
+| FR-16 | The system shall provide a four-week care plan with separate puppy and kitten tracks, and persist progress. |
+| FR-17 | The system shall provide a searchable, filterable library of care guides. |
+| FR-18 | The system shall allow any user to post anonymously to the community wall, between 10 and 280 characters. |
+| FR-19 | The system shall permit one heart per post per browser. |
+| FR-20 | The system shall allow a signed-in user to update their display name and interface preferences. |
+| FR-21 | The system shall restrict the administration console to users with the administrator role. |
+| FR-22 | The system shall provide a diagnostics page reporting the status of each external dependency. |
+| FR-23 | The system shall allow a visitor to register either as a pet owner or as a veterinary professional. |
+| FR-24 | The system shall capture a veterinary professional's full name, practice and registration number at sign-up. |
+| FR-25 | The system shall create every veterinary professional account in an unverified state. |
+| FR-26 | The system shall allow any signed-in user to post a question, specifying the species concerned. |
+| FR-27 | The system shall permit only verified veterinary professionals to post answers. |
+| FR-28 | The system shall display the answering professional's name, practice and verified status beside each answer. |
+| FR-29 | The system shall make all questions and answers readable without an account. |
+| FR-30 | The system shall state that Ask a Vet is not an emergency service and link to the vet finder. |
+| FR-31 | The system shall allow an owner to edit and delete their own pet profiles, asking for confirmation before deleting. |
+| FR-32 | The system shall allow an owner to record dated weigh-ins for a pet, refuse a future date, and chart the weight trend once at least two exist. |
+| FR-33 | The system shall allow an owner to create, complete and delete dated reminders for a pet, and show upcoming and overdue reminders on the dashboard. |
+| FR-34 | The system shall allow a signed-in user to change their password. |
+| FR-35 | The system shall allow a signed-in user to permanently delete their own account and personal data after typing a confirmation word. |
+| FR-36 | The system shall allow an administrator to verify and revoke veterinary professionals from the admin console, and flag a registration number used by more than one account. |
+
+## Non-functional requirements
+
+| ID | Category | Requirement |
+|---|---|---|
+| NFR-01 | Usability | Every core tool shall be usable without creating an account. |
+| NFR-02 | Usability | The interface shall be operable on screens from 375 px to 2560 px wide. |
+| NFR-03 | Accessibility | The system shall honour the operating system's "reduce motion" setting by disabling animation. |
+| NFR-04 | Accessibility | Interactive controls shall be reachable by keyboard and shall expose accessible labels. |
+| NFR-05 | Performance | The 3D scene shall stop rendering when not visible, and shall cap device pixel ratio at 2. |
+| NFR-06 | Performance | The 3D assets shall be loaded only after the page text has rendered. |
+| NFR-07 | Security | Each user's pet records shall be readable only by that user, enforced at database level. |
+| NFR-08 | Security | Passwords shall never be stored by the application; authentication is delegated to Supabase. |
+| NFR-09 | Security | Redirect targets supplied in a URL shall be validated as internal paths. |
+| NFR-10 | Reliability | The system shall remain usable for its offline tools when the database is unreachable. |
+| NFR-11 | Reliability | A failed database write shall be reported to the user, never reported as success. |
+| NFR-12 | Integrity | The system shall never display fabricated clinical, safety or directory information. |
+| NFR-13 | Maintainability | The feeding calculation shall exist in exactly one module used by every screen. |
+| NFR-14 | Portability | The system shall run in current versions of Chrome, Firefox, Safari and Edge. |
+| NFR-15 | Security | The restriction on who may answer a question shall be enforced by a database policy, not by the user interface. |
+| NFR-16 | Integrity | A professional credential shall never be self-asserted; verification shall require an administrator to check the registration number. |
+
+> **NFR-12 is worth highlighting in your report.** An earlier version of this
+> system displayed invented veterinary practices with invented ratings and a
+> fabricated emergency telephone number. Removing that and replacing it with a
+> real data source is a genuine, defensible engineering decision — the kind of
+> thing markers reward.
+
+## Use cases
+
+| ID | Use case | Actor | Pre-condition | Main flow | Post-condition |
+|---|---|---|---|---|---|
+| UC-01 | Register | Visitor | None | Enter details → submit → confirm email | Account exists |
+| UC-02 | Sign in | Pet Owner | Account exists | Enter credentials → submit | Session active |
+| UC-03 | Add a pet | Pet Owner | Signed in | Choose species → enter details → save | Pet stored |
+| UC-04 | Plan feeding | Any | None | Set species, weight, stage, activity, condition | Plan displayed |
+| UC-05 | Check a food | Any | None | Type item → read verdict | Verdict displayed |
+| UC-06 | Find a vet | Any | Location permission | Allow location → view list | Practices listed |
+| UC-07 | Assess wellness | Any | None | Answer 8 questions | Score displayed |
+| UC-08 | Post to wall | Any | None | Type post → choose mood → post | Post published |
+| UC-09 | Moderate | Admin | Admin role | Open console → act | Content updated |
+| UC-10 | Register as a vet | Visitor | None | Choose "Veterinary pro" → enter name, practice, registration → submit | Unverified vet account exists |
+| UC-11 | Verify a vet | Admin | Admin role, vet account exists | Check registration against the register → Admin Panel → Vets → Verify | Vet may answer |
+| UC-12 | Ask a question | Pet Owner | Signed in | Enter title, detail, species → post | Question visible to all |
+| UC-13 | Answer a question | Verified Vet | Verified account | Open question → write answer → post | Answer published with a verified badge |
+| UC-14 | Log a weigh-in | Pet Owner | Signed in, pet exists | Open the pet's page → enter kg and date → add | Entry stored; pet's current weight updated; chart redrawn |
+| UC-15 | Set a reminder | Pet Owner | Signed in, pet exists | Open the pet's page → choose type, title, due date → add | Reminder shown on the pet page and dashboard |
+| UC-16 | Delete account | Any signed-in user | Signed in | Settings → Account → type DELETE → confirm | Account and personal data removed; questions and answers stay, detached |
+
+---
+
+# Part 8 — Design detail
+
+## Architecture — three tiers
+
+```
+┌──────────────────────────────────────────────────┐
+│  PRESENTATION TIER  (the browser)                │
+│  React components, Tailwind styling, Three.js    │
+│  Runs on the user's device                       │
+└───────────────────┬──────────────────────────────┘
+                    │  HTTPS
+┌───────────────────▼──────────────────────────────┐
+│  APPLICATION TIER  (Next.js on Vercel)           │
+│  Routing, proxy.ts access checks, page rendering │
+│  Business logic in lib/                          │
+└───────────────────┬──────────────────────────────┘
+                    │  HTTPS + row-level security
+┌───────────────────▼──────────────────────────────┐
+│  DATA TIER  (Supabase / PostgreSQL)              │
+│  Tables, constraints, RLS policies, functions    │
+└──────────────────────────────────────────────────┘
+
+External:  OpenStreetMap Overpass API  (vet practice data)
+```
+
+### Hardware architecture (for that section of Phase 4)
+
+- **Client:** any device with a modern browser. Minimum practical: dual-core
+  CPU, 2 GB RAM, a 375 px-wide screen. WebGL is used if available; the site works
+  without it.
+- **Application server:** Vercel's managed serverless platform. No server is
+  owned or administered by the team.
+- **Database server:** Supabase managed PostgreSQL.
+
+### Network architecture
+
+All traffic is HTTPS. The browser talks to Vercel; the browser also talks
+directly to Supabase (using the public anon key, constrained by RLS) and to the
+Overpass API. There is no direct browser-to-database socket — Supabase exposes a
+REST layer.
+
+## The feeding calculation
+
+**Formula**
+
+```
+RER = 70 × (weight in kg) ^ 0.75
+MER = RER × activity × lifeStage × species × bodyCondition
+```
+
+**Multipliers**
+
+| Factor | Values |
+|---|---|
+| Activity | Low 1.3 · Normal 1.6 · High 2.0 |
+| Life stage | Young 2.0 · Adult 1.0 · Senior 0.9 |
+| Species | Dog 1.0 · Cat 0.9 · Rabbit 0.7 · Bird 1.3 · Reptile 0.35 · Small pet 1.1 |
+| Body condition | 1 Very thin 1.2 · 2 Lean 1.1 · 3 Ideal 1.0 · 4 Overweight 0.9 · 5 Obese 0.8 |
+
+**Meals per day** (young / adult and senior): dog 3 / 2 · cat 4 / 2 · rabbit 2 / 2
+· bird 2 / 2 · reptile 1 / 1 · small pet 2 / 2.
+
+> **Two corrections worth putting in your report.** The senior factor was 1.1,
+> which fed every senior pet *more* than a younger adult of the same weight —
+> the opposite of what the care guides tell owners. It is now 0.9. And body
+> condition used to have only three values, so "very thin" and "lean" (and
+> "overweight" and "obese") produced identical plans; each score now has its
+> own factor. Meals used to be "3 if young, else 2" for every species, which
+> gave a reptile two meals a day.
+
+**Pseudocode — for your Program Design section**
+
+```
+FUNCTION ComputeFeedingPlan(species, weight, activity, lifeStage, bodyCondition)
+
+    config ← SpeciesConfig[species]
+
+    // Defend against blank, negative or absurd input
+    IF weight is not a valid number THEN weight ← config.defaultWeight
+    weight ← CLAMP(weight, 0.05, config.maxWeight)
+    activity ← CLAMP(activity, 1.0, 2.5)
+    bodyCondition ← CLAMP(bodyCondition, 1, 5)
+
+    // Resting energy requirement
+    RER ← 70 × POWER(weight, 0.75)
+
+    // Adjust toward an ideal body condition, one step per score
+    conditionFactor ← {1: 1.2, 2: 1.1, 3: 1.0, 4: 0.9, 5: 0.8}[ROUND(bodyCondition)]
+
+    stageFactor ← LifeStageFactor[lifeStage]     // young 2.0, adult 1.0, senior 0.9
+
+    MER ← ROUND(RER × activity × stageFactor × config.factor × conditionFactor)
+    MER ← MAX(MER, 1)
+
+    dryGrams ← ROUND(MER ÷ config.kcalPerGramDry)
+    wetGrams ← ROUND(MER ÷ 1.2)
+    meals    ← IF lifeStage = "young" THEN config.meals.young ELSE config.meals.adult
+    water    ← ROUND(weight × config.waterMlPerKg)
+
+    RETURN (MER, dryGrams, wetGrams, meals, dryGrams ÷ meals, water)
+
+END FUNCTION
+```
+
+**Worked example** — a 12 kg adult dog, normal activity, ideal condition:
+
+```
+RER = 70 × 12^0.75 = 70 × 6.45 = 451 kcal
+MER = 451 × 1.6 × 1.0 × 1.0 × 1.0 = 722 kcal/day
+Dry food = 722 ÷ 3.5 = 206 g
+Meals = 2, so 103 g each
+Water = 12 × 55 = 660 ml
+```
+
+A second check you can do in the running app: the home page's Portion Facts
+panel opens on exactly this dog — 12 kg, adult, moderate activity — and shows
+**722 kcal** and **2 × 103 g**, because it calls the same function. (The old
+landing page had a "Biscuit's plan" card that showed a typed-in "742 kcal" for a
+12.4 kg dog, where the engine gives 740. It was fixed to use the engine, and the
+card has since gone with the old page.)
+
+## The food-safety matching algorithm
+
+**The problem it solves.** A naive substring match caused a dangerous bug: the
+query "chicken" matched the alias "chicken bone" and reported plain cooked
+chicken as **DO NOT FEED**. A safety tool that cries wolf on safe food trains
+users to ignore the warnings that matter.
+
+**Pseudocode**
+
+```
+FUNCTION LookupFood(query)
+
+    q ← LOWERCASE(query), punctuation removed, spaces collapsed
+    IF LENGTH(q) < 2 THEN RETURN Empty
+
+    best ← NONE
+
+    FOR EACH entry IN FoodDatabase
+        FOR EACH alias IN entry.aliases
+            score ← 0
+            IF q = alias                    THEN score ← 1000
+            ELSE IF Singular(q) = Singular(alias) THEN score ← 900
+            ELSE IF alias appears as a WHOLE PHRASE inside q
+                                            THEN score ← 500 + LENGTH(alias)
+            // Deliberately NOT the reverse: "chicken" must not match
+            // the alias "chicken bone".
+
+            IF score > 0 AND (best is NONE OR score > best.score)
+                best ← (entry, alias, score)
+        END FOR
+    END FOR
+
+    IF best exists THEN RETURN Found(best.entry)
+    RETURN Unverified(query, NearMissSuggestions(q))
+
+END FUNCTION
+```
+
+**Why longest-alias-wins:** "chicken bone" (12 characters) outscores "chicken"
+(7), so the specific warning still wins when it genuinely applies.
+
+## The 3D bowl (for your Implementation section)
+
+The public home page is built around one 3D scene: a glazed feeding bowl, the
+kibble in it, the foods a visitor checks, and a steel ID tag at the end. It is
+worth writing up because it is the most technically involved part of the
+system. The full account is in `docs/01-SYSTEM-REFERENCE.md` Part 9; this is
+the short version.
+
+It replaced an earlier landing page of morphing particle animals. That page was
+replaced at the owner's request with a design matching the team's two previous
+client sites — a scroll-driven story with its own visual world — rather than a
+feature list over a background effect. The 3D motif in every tool page header
+went with it; tool pages now have a static header with a gram-scale ruler drawn
+in SVG, so only the home page uses WebGL.
+
+### What it draws, chapter by chapter
+
+| Scroll position | Chapter | The scene |
+|---|---|---|
+| Top | The bowl | The bowl beside the headline, with a generous serving |
+| 1 | Portions | Seen from above; holds exactly **one meal** from the Portion Facts panel (one piece ≈ 1.5 g, as the page says) |
+| 2 | Safe or not | A checked food drops in: safe lands, caution shrinks to a taste, toxic is knocked off with a red flash of the rim |
+| 3–5 | Records, Vets, Together | Covered by paper sections; the scene stops drawing |
+| 6 | Join | A bone-shaped steel tag engraves the pet name typed into the sign-up card |
+
+### How it is built
+
+- **One shared object, no React state per frame.** `components/landing/story.ts`
+  holds scene time, kibble count, the latest food and the tag name. Scrolling and
+  the controls write to it; the 3D reads it every frame. Nothing re-renders as
+  you scroll.
+- **Scroll → scene time.** Each section carries a number; the page interpolates
+  between the midpoints of the sections either side of the middle of the
+  screen. Tying it to the sections, not the page height, keeps the bowl in step
+  with the text on any device.
+- **The camera** moves between keyframes (one set for wide screens, one for
+  tall), eased and then damped every frame, so fast scrolling never snaps.
+- **The bowl** is a profile turned on a lathe (`LatheGeometry`) with a glossy
+  clearcoat glaze and speckles added in the shader.
+- **The kibble** is packed by rejection sampling inside the bowl's real inner
+  shape, then sorted bottom-up, so "the first N pieces" always looks like a bowl
+  filled to a level. A seeded random generator makes the pile the same every
+  visit.
+
+### Performance decisions worth citing
+
+- **One draw call** for up to 420 pieces of kibble (an instanced mesh), and only
+  the pieces in mid-air are updated — a settled bowl costs no CPU per frame.
+- **Quality tiers** from the device's cores, memory, pointer type and data-saver
+  setting set the pixel-ratio cap, kibble count, shadows and anti-aliasing;
+  the pixel ratio also drops automatically if frames slow down.
+- **Text first.** The server sends the page and a CSS poster; the 3D loads on
+  the first scroll, pointer move or touch, or when the browser is idle.
+- **Shader warm-up — a measured fix.** A performance trace showed 400–700 ms
+  freezes mid-scroll, caused by the graphics driver linking each shader the
+  first time it was drawn. Every shader is now compiled up front with
+  `compileAsync`, and the canvas fades in only afterwards. The 95th-percentile
+  frame time while scrolling was then about 17.6 ms (≈ 60 fps) on a laptop with
+  Intel Iris Plus graphics. Be honest if asked about later runs: they read about
+  23 ms, but a blank page read 23.7 ms in the same session — the laptop was
+  throttled, and the page added nothing measurable. These are one machine's
+  figures, not a device survey.
+- **Paused when covered**, and **no blur** over the live canvas or in scroll
+  reveals — both measured as costly.
+
+### Bugs found while building it (good material for a reflection section)
+
+| Bug | Cause | Fix |
+|---|---|---|
+| With WebGL disabled the page crashed | Nothing caught the error from creating the WebGL context | An error boundary falls back to the still poster |
+| Phones laid the page out 1440 px wide, zoomed out | An absolutely positioned SVG took its own intrinsic width | `width: 100%` on it, `overflow-x: clip` on the page |
+| 400–700 ms freezes while scrolling | Shaders linked on first draw | Compiled up front, as above |
+
+## Interface design
+
+### Menu structure
+
+```
+Signed out (top navigation bar)
+├── Nutrition
+├── Food Safety
+├── Find a Vet
+├── Wellness
+├── Community
+├── Guides
+├── Sign In
+└── Add Your Pet  (call to action)
+
+Signed in (left sidebar)
+├── Overview
+├── My Pets
+├── Add a Pet
+├── Nutrition Planner
+├── Food Safety
+├── Wellness Check
+├── Care Plan
+├── Find a Vet
+├── Ask a Vet
+├── Community
+├── Care Guides
+├── Vet Console   (veterinary professionals only)
+├── Admin Panel   (administrators only)
+├── Settings
+└── Sign Out
+```
+
+### Input design
+
+| Screen | Field | Control | Validation |
+|---|---|---|---|
+| Sign up | Email | text | valid email, unique |
+| Sign up | Password | password | at least 8 characters |
+| Add pet | Name | text | required, at most 40 characters |
+| Add pet | Species | button group | one of eight |
+| Add pet | Weight | number | optional; if given, above 0 and no more than the species maximum in `lib/health.ts` |
+| Add pet | Sex | button group | Male / Female / Not sure |
+| Pet page | Weigh-in | number + date | as Add pet weight; date not in the future |
+| Pet page | Reminder | type + text + date | title 2–80 characters (blank uses the type's name); date today or later |
+| Settings | New password | password ×2 | at least 8 characters; both entries match |
+| Settings | Delete account | text | must be exactly `DELETE` |
+| Nutrition | Weight | slider | clamped to species range |
+| Nutrition | Body condition | slider | 1 to 5 |
+| Food safety | Search | text | at least 2 characters |
+| Wall | Post | textarea | 10 to 280 characters |
+
+### Output design
+
+| Screen | Output | Format |
+|---|---|---|
+| Nutrition | Daily energy | large number + "kcal / day" |
+| Nutrition | Portions | grams, cups, meals, millilitres |
+| Nutrition | Macro profile | radar chart |
+| Food safety | Verdict | colour-coded card: green safe, amber moderation, red toxic |
+| Vet finder | Practices | map pins + distance-sorted cards |
+| Wellness | Score | 0–100 in a ring, with a verdict band |
+| Care plan | Progress | percentage + bar |
+| Dashboard | Weight trend | line chart from real weigh-ins (needs at least two) |
+| Dashboard | Reminders | list, overdue ones highlighted |
+| Pet page | Weight log | line chart plus a dated list of entries |
+| Admin | New accounts, last 14 days | area chart from `profiles.created_at` |
+| Admin | Questions by species | bar chart, answered vs waiting |
+
+### Colour palette
+
+| Role | Colour | Hex |
+|---|---|---|
+| Background | Ink (warm violet-black) | `#0D0A14` |
+| Card | Deep violet | `#171226` |
+| Primary | Apricot | `#FFAE6D` |
+| Secondary | Iris | `#8E8BF5` |
+| Accent | Butter | `#FFD98E` |
+| Safe | Pistachio | `#8FD9A8` |
+| Danger | Rose | `#FF6B81` |
+| Text | Off-white | `#F4EFF7` |
+
+Typography: **Space Grotesk** for headings, **Inter** for body, **Instrument
+Serif** italic for editorial accents. The public home page and the tool-page
+headers use their own set — **Newsreader** for headlines (with italic accent
+words), **Archivo Black** for label panels and **Geist Mono** for read-outs —
+loaded as separate `--font-pp-*` variables so the signed-in app's type is
+unchanged.
+
+## Security and backup design
+
+| Concern | Measure |
+|---|---|
+| Password storage | Never stored by the app. Supabase hashes with bcrypt. |
+| Session handling | HTTP-only cookies managed by Supabase. |
+| Access control | Row-Level Security at database level, plus `proxy.ts` route guards. Column-level grants limit *which columns* a user may change (e.g. never their own `role`). |
+| Privilege escalation | Only an admin may change a vet's verification or registration number (trigger); the admin check never trusts user-editable metadata. |
+| Privilege separation | Anonymous public key in the browser; the service-role key is never used client-side. |
+| Open redirect | `next` parameters validated as internal single-slash paths. |
+| Injection | All queries go through the Supabase client, which parameterises. |
+| Account enumeration | Password reset always shows the same confirmation. |
+| Transport | HTTPS everywhere, enforced by Vercel. |
+| Backup | Supabase takes automatic daily backups; point-in-time recovery on paid tiers. |
+| Source backup | Full history in Git on GitHub. |
+
+---
+
+# Part 9 — What to write in each phase
+
+## Phase 2 — Planning
+
+| Required section | Where the material is |
+|---|---|
+| Identification of need | [Part 1 → The problem it solves](#the-problem-it-solves) |
+| Preliminary investigation | Part 1 + the actor table |
+| Feasibility — technical | [Part 2 → Why these choices](#why-these-choices-for-your-feasibility-section) |
+| Feasibility — economic | All tools are free tier: hosting, database and libraries cost nothing at this scale |
+| Feasibility — operational | Part 4: every tool works without an account, in a browser, with no install |
+| Project planning | Your own team roles and task split |
+| PERT and Gantt | Use the module deadlines; the phase list below gives the task names |
+| SRS | [Part 7](#part-7--requirements-ready-to-paste) — copy the FR and NFR tables |
+| Data models | [Part 5](#part-5--the-database) — ER diagram and table definitions |
+
+## Phase 3 — Analysis
+
+| Required section | Where the material is |
+|---|---|
+| Introduction | Part 1 |
+| Information-gathering methodology | Describe what you actually did — observation of pet owners, interviews, reviewing existing apps. Be honest. |
+| Analysis of the existing system | Compare against how owners manage now: paper records, memory, web searches, asking friends. Also review commercial apps. |
+| Data analysis, integrity & constraints | [Part 5 → Data integrity and constraints](#data-integrity-and-constraints) |
+| Weaknesses of the current system | Guessed portions; missed vaccination dates; unreliable web advice; no single record to show a vet |
+| Functional requirements | [Part 7](#functional-requirements) |
+| Non-functional requirements | [Part 7](#non-functional-requirements) |
+| Data modelling | [Part 5](#relationships-your-er-diagram) + [Part 6](#part-6--how-data-moves-for-your-dfds) |
+
+## Phase 4 — System Design
+
+| Required section | Where the material is |
+|---|---|
+| Introduction | Part 1 |
+| System design | [Part 4](#part-4--every-screen) |
+| Architectural design | [Part 8 → Architecture](#architecture--three-tiers) — software, hardware and network are all covered |
+| Class diagram | Use the `lib/types.ts` interfaces: `Pet`, `UserProfile`, `WallPost`, `VetPractice`, `FeedingPlan`, `FoodEntry` |
+| Physical design | [Part 5](#part-5--the-database) — actual column types |
+| Database design | [Part 5](#part-5--the-database) + `supabase/schema.sql` |
+| Program design (pseudocode) | [Part 8](#the-feeding-calculation) and [the matching algorithm](#the-food-safety-matching-algorithm) |
+| Interface design | [Part 8 → Interface design](#interface-design) |
+| Security and backup | [Part 8 → Security and backup design](#security-and-backup-design) |
+
+## Phase 5 — Implementation
+
+| Required section | Where the material is |
+|---|---|
+| Introduction | Part 2 |
+| Coding | [Part 3](#part-3--every-folder-and-file). Screenshot real files; the code is commented explaining *why*, not just what. |
+| Testing | [Part 10](#part-10--test-cases) |
+| System testing | [Part 10](#part-10--test-cases) — fill in the Actual Result column when you run them |
+| Installation | `SETUP.md` — quote it directly |
+
+## Screenshots worth taking
+
+1. Home page with the 3D bowl beside the headline
+2. Home page Portions chapter: the Portion Facts panel and the bowl holding one
+   meal
+3. Nutrition Planner with a result
+4. Food Safety — "chicken" (safe)
+5. Food Safety — "chocolate" (toxic, with the emergency panel)
+6. Food Safety — an unverified item showing suggestions
+7. Find a Vet with real practices listed
+8. Wellness Check result
+9. Care Plan, both puppy and kitten tracks
+10. Community Wall
+11. Sign-in and sign-up
+12. Dashboard with pets, reminders and a weight chart (log at least two
+    weigh-ins first)
+13. A pet's page, showing the weight log and reminders
+14. `/setup` with all checks green
+15. Mobile view of any two screens
+16. Supabase Table Editor showing the nine tables
+17. Admin Panel → Vets, with a professional awaiting verification
+18. Home page Safe or not chapter: chocolate checked and knocked out of the bowl
+19. Home page Join chapter: a pet's name engraved on the 3D tag
+
+---
+
+# Part 10 — Test cases
+
+Fill in the last two columns when you run them.
+
+## Unit test cases
+
+| ID | Module | Input | Expected | Actual | Pass |
+|---|---|---|---|---|---|
+| UT-01 | Feeding | dog, 12 kg, adult, normal, ideal | 722 kcal/day | | |
+| UT-02 | Feeding | cat, 4.5 kg, adult, normal | 311 kcal/day, 82 g dry | | |
+| UT-03 | Feeding | weight = 0 | Clamped, no NaN shown | | |
+| UT-04 | Feeding | weight = −5 | Clamped to minimum | | |
+| UT-05 | Feeding | weight = 99999 | Clamped to species maximum | | |
+| UT-06 | Feeding | dog 12 kg, puppy stage | 1444 kcal/day, 3 meals | | |
+| UT-07 | Food safety | "chicken" | SAFE | | |
+| UT-08 | Food safety | "chicken bone" | TOXIC | | |
+| UT-09 | Food safety | "my dog ate a chicken bone" | TOXIC | | |
+| UT-10 | Food safety | "chocolate" | TOXIC | | |
+| UT-11 | Food safety | "grapes" | TOXIC | | |
+| UT-12 | Food safety | "milk" | CAUTION | | |
+| UT-13 | Food safety | "" (empty) | No verdict shown | | |
+| UT-14 | Food safety | "zzzzz" | Unverified + suggestions | | |
+| UT-15 | Food safety | "🐶" | No verdict, no crash | | |
+| UT-16 | Wellness | all best answers | Score 100, "Thriving" | | |
+| UT-17 | Wellness | all worst answers | Score 0, "See a vet" | | |
+| UT-18 | Distance | two known coordinates | Correct km to 1 decimal | | |
+| UT-19 | Feeding | dog 12 kg, **senior**, normal, ideal | 650 kcal/day — less than an adult | | |
+| UT-20 | Feeding | dog 12 kg, adult, normal, body condition 1 / 2 / 4 / 5 | 867 / 794 / 650 / 578 kcal/day — all different | | |
+| UT-21 | Feeding | reptile, adult | 1 meal per day | | |
+| UT-22 | Wellness | all best answers except "Barely eating" | "See a vet", whatever the score | | |
+| UT-23 | Food safety | "peanut butter" | CAUTION (one entry for nut butters) | | |
+| UT-24 | Food safety | "my dog ate a weed" | Not reported as cannabis | | |
+
+## System / integration test cases
+
+| ID | Scenario | Steps | Expected | Actual | Pass |
+|---|---|---|---|---|---|
+| ST-01 | Register | Fill sign-up, submit | Account created, confirmation shown | | |
+| ST-02 | Register — weak password | Enter 5 characters | Rejected with a message | | |
+| ST-03 | Register — duplicate email | Reuse an email | Clear "already registered" message | | |
+| ST-04 | Sign in — valid | Correct credentials | Lands on dashboard | | |
+| ST-05 | Sign in — invalid | Wrong password | "Email and password don't match" | | |
+| ST-06 | Sign in — database down | Disconnect network | "Can't reach the database" + link to /setup | | |
+| ST-07 | Route guard | Open /dashboard signed out | Redirected to sign in | | |
+| ST-08 | Return path | Open /settings signed out, then sign in | Lands on /settings, not /dashboard | | |
+| ST-09 | Add pet | Complete the form | Appears in My Pets | | |
+| ST-10 | Add pet — no name | Leave name blank | Rejected | | |
+| ST-11 | Data isolation | Sign in as a second user | Cannot see the first user's pets | | |
+| ST-12 | Vet finder — allow | Allow location | Real practices, sorted by distance | | |
+| ST-13 | Vet finder — deny | Block location | Falls back to default city with a notice | | |
+| ST-14 | Vet finder — offline | Disconnect | Error + retry, no invented clinics | | |
+| ST-15 | Wall — post | Post 20 characters | Appears at the top | | |
+| ST-16 | Wall — too short | Post 5 characters | Rejected | | |
+| ST-17 | Wall — write fails | Disconnect, then post | Error shown, draft restored, no false success | | |
+| ST-18 | Wall — heart twice | Heart, reload, heart again | Count rises once only | | |
+| ST-19 | Care plan persists | Tick steps, reload | Ticks remain | | |
+| ST-20 | Admin guard | Open /admin as a normal user | Access denied | | |
+| ST-21 | Responsive | Resize to 375 px | No horizontal scrolling | | |
+| ST-22 | Reduced motion | Enable in the OS, reload | Animation stops, content still readable | | |
+| ST-23 | No WebGL | Disable it | Page still renders with a gradient instead | | |
+| ST-24 | Setup page | Open /setup | Every check reports pass or a named fix | | |
+| ST-25 | Register as vet | Choose "Veterinary pro", fill details | Account created, marked unverified | | |
+| ST-26 | Vet without registration no. | Leave it blank | Rejected with a message | | |
+| ST-27 | Unverified vet answers | Sign in unverified, try to answer | No answer box; direct insert refused by the database | | |
+| ST-28 | Verified vet answers | Verify in Admin Panel → Vets, sign in as the vet, answer | Answer published with a verified badge | | |
+| ST-29 | Anonymous asks | Signed out, open /ask | Can read; asked to sign in to post | | |
+| ST-30 | Answer count | Post an answer | Question's answer count rises by exactly one | | |
+| ST-31 | Answers survive reload | Post an answer, reload /ask | Answer still shown with the vet's name | | |
+| ST-32 | New account dashboard | Sign up, open /dashboard | No pets, reminders or chart that the user did not create | | |
+| ST-33 | Add pet — implausible weight | Cat, 45 kg | Rejected with a message about kilograms | | |
+| ST-34 | Weight log | Add two weigh-ins on the pet page | Chart appears on the pet page and dashboard; pet's weight = latest entry | | |
+| ST-35 | Weigh-in in the future | Date it tomorrow | Rejected | | |
+| ST-36 | Reminder | Add one due today; tick it done | Shows on dashboard; disappears from upcoming when done | | |
+| ST-37 | Delete pet | Delete, confirm | Pet, its reminders and weigh-ins gone | | |
+| ST-38 | Self-promotion to admin | Signed in as a normal user, call the API directly (e.g. from the browser console) to set your own `profiles.role` to `admin` | Refused by the database | | |
+| ST-39 | Self-verification | Signed in as an unverified vet, call the API directly to set your own `verified` to true | Refused by the database | | |
+| ST-40 | Admin removes a post | Remove, then reload | Post stays gone | | |
+| ST-41 | Change password | Settings → Password & Privacy | New password works at next sign-in | | |
+| ST-42 | Forgot password | Follow the emailed link | Lands on Settings → Password & Privacy, signed in | | |
+| ST-43 | Delete account | Settings → Account, type DELETE | Signed out; cannot sign in again; their questions remain without a name | | |
+
+## Testing strategy (for the write-up)
+
+- **Unit testing** — individual functions in isolation: the feeding calculation
+  and the food-safety matcher. Both were tested with valid, boundary and invalid
+  input.
+- **Integration testing** — screens together with Supabase: sign-up through to a
+  saved pet appearing on the dashboard. Separately, the real `schema.sql` was
+  run in PGlite (PostgreSQL in WebAssembly) by an automated script of 49
+  checks — tables, triggers, constraints and every security rule, including the
+  attacks that worked against the old schema. All 49 pass. Run it with
+  `npm test` (`tests/schema.test.mjs`), alongside 48 unit checks of the
+  nutrition, food-safety, wellness and validation logic.
+- **System testing** — the complete deployed application against the functional
+  requirements.
+- **Boundary testing** — deliberately at the limits: 0 kg, negative weight,
+  99999 kg, a 9-character post, a 281-character post.
+- **Negative testing** — deliberately wrong: bad password, no network, blocked
+  location, disabled WebGL, blocked browser storage.
+- **Compatibility testing** — Chrome, Firefox, Edge; mobile and desktop widths.
+- **Accessibility testing** — keyboard-only navigation and the reduce-motion
+  setting.
+
+---
+
+# Part 11 — Glossary
+
+| Term | Plain meaning |
+|---|---|
+| **API** | A way for one program to request data from another. |
+| **Anon key** | The public Supabase key shipped in the browser. Safe, because database rules limit it. |
+| **Client Component** | Code that runs in the visitor's browser. |
+| **Component** | A reusable piece of interface. |
+| **CRUD** | Create, Read, Update, Delete. |
+| **Environment variable** | A setting kept outside the code, such as a database address. |
+| **Foreign key** | A column pointing at a row in another table. |
+| **Framework** | A structure that handles common plumbing for you. |
+| **Git / GitHub** | Version history / the website that stores it. |
+| **Hashing** | One-way scrambling, used for passwords. |
+| **JSON** | A common text format for data. |
+| **MER** | Maintenance Energy Requirement — calories needed per day. |
+| **Normalisation** | Organising tables to avoid duplicated data. |
+| **Primary key** | The column uniquely identifying a row. |
+| **Proxy (middleware)** | Code that runs before a page loads; used here for access checks. |
+| **RER** | Resting Energy Requirement — calories at complete rest. |
+| **RLS** | Row-Level Security — the database decides which rows you may see. |
+| **Server Component** | Code that runs on the server before the page is sent. |
+| **Service-role key** | The admin Supabase key. Bypasses all rules. Never put in a browser. |
+| **Shader** | A small program on the graphics card; used for the home page's 3D bowl. |
+| **SQL** | The language used to talk to a relational database. |
+| **Three.js** | The JavaScript library used for 3D graphics. |
+| **TypeScript** | JavaScript with type checking. |
+| **UUID** | A long unique identifier, e.g. `a3f5...`. |
+| **WebGL** | The browser technology that draws 3D on the graphics card. |
+
+---
+
+## Honest limitations — state these in your report
+
+Markers reward candour, and every one of these is defensible.
+
+1. **Reminders are shown in the app only.** Nothing sends an email or push
+   notification, so an owner sees a due vaccine only when they open PetPal.
+2. **Vet data quality depends on OpenStreetMap.** Coverage varies by area and
+   some practices have no phone number or opening hours. We show what exists
+   rather than filling gaps with invented values.
+3. **No photo upload yet.** The `photo_url` column exists; the upload flow does
+   not.
+4. **The wall has no moderation queue.** Posts appear immediately; an
+   administrator can remove them afterwards.
+5. **The community table is still named `confessions`** internally, inherited
+   from the project this was forked from. Renaming it would require a data
+   migration.
+6. **Vet verification is a human check.** An administrator verifies from the
+   Admin Panel, but the registration number is checked against the register by
+   hand — there is no link to a veterinary register. A registration number
+   shared by two accounts is flagged, not blocked.
+7. **The first administrator must be made with SQL.** Any button for it would be
+   a way for anyone to make themselves an administrator.
+8. **Tests run on request, not on every change.** `npm test` runs the 49-check
+   PGlite schema test and 48 logic checks, but no CI pipeline runs them
+   automatically, and the screens are checked by hand.
+9. **The home page's 3D needs a graphics card.** Without WebGL, or on a
+   software renderer, it shows a still poster instead; everything else on the
+   page works. Its performance was measured on one laptop, not across devices.
+
+(Fixed since earlier versions of this guide, so no longer limitations: the
+admin console now shows live data; reminders and the weight log are real and
+stored per pet; pets can be edited and deleted; vets are verified from the
+Admin Panel rather than by SQL; and vets have their own console at `/vet` with a
+queue of unanswered questions.)
+
+## Future scope
+
+- Email or push notifications for reminders
+- Photo upload for pets
+- Exporting a pet's record as a PDF to take to the vet
+- Checking registration numbers against a veterinary register automatically
+- An automated test suite (including the schema checks) that runs on every change
+- Letting an owner mark the answer that helped, and follow up on a thread
+- Multi-language support
